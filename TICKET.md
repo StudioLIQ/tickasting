@@ -188,7 +188,7 @@
 - 중복 기록이 발생하지 않는다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -511,3 +511,11 @@
   - kaspa/kasfyi-adapter.ts: Kas.fyi API 구현 (retry/backoff 포함)
   - kaspa/mock-adapter.ts: 테스트용 Mock 어댑터
   - 8개 mock adapter tests 통과
+
+- **GP-006** (2026-02-02): Treasury 스캔 폴링 완료
+  - Prisma 클라이언트 indexer에 추가 (api schema 공유)
+  - TreasuryScanner 클래스: live sales 폴링, purchase_attempts INSERT
+  - createScannerLoop: 설정 가능한 폴링 인터벌
+  - /health: DB 상태, live sales 카운트 포함
+  - /stats: 모니터링 엔드포인트
+  - 7개 unit tests (mock adapter)

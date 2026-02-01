@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import { prisma } from './db.js'
 import { createScannerLoop } from './scanner.js'
+import { PurchaseValidator } from './validator.js'
 import { KasFyiAdapter } from '@ghostpass/shared'
 
 const PORT = parseInt(process.env['INDEXER_PORT'] || '4002', 10)
@@ -79,22 +80,53 @@ async function main() {
   })
 
   // Start scanner loop
-  const scannerLogger = {
+  const indexerLogger = {
     info: (msg: string, data?: unknown) => fastify.log.info({ data }, msg),
     error: (msg: string, data?: unknown) => fastify.log.error({ data }, msg),
     debug: (msg: string, data?: unknown) => fastify.log.debug({ data }, msg),
   }
 
   const scannerLoop = createScannerLoop(prisma, adapter, POLL_INTERVAL_MS, {
-    logger: scannerLogger,
+    logger: indexerLogger,
   })
 
-  fastify.log.info(`Scanner started with ${POLL_INTERVAL_MS}ms interval`)
+  // Start validator loop
+  const validator = new PurchaseValidator(prisma, adapter, { logger: indexerLogger })
+  let validatorRunning = true
+  let validatorTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+  const runValidatorLoop = async () => {
+    if (!validatorRunning) return
+
+    try {
+      const results = await validator.validatePending()
+      if (results.length > 0) {
+        const valid = results.filter((r) => r.status === 'valid').length
+        const invalid = results.length - valid
+        fastify.log.info(`Validated ${results.length} attempt(s): ${valid} valid, ${invalid} invalid`)
+      }
+    } catch (error) {
+      fastify.log.error({ error }, 'Validator loop error')
+    }
+
+    if (validatorRunning) {
+      validatorTimeoutId = setTimeout(runValidatorLoop, POLL_INTERVAL_MS)
+    }
+  }
+
+  // Start validator after a short delay (to let scanner run first)
+  setTimeout(runValidatorLoop, 1000)
+
+  fastify.log.info(`Scanner and Validator started with ${POLL_INTERVAL_MS}ms interval`)
 
   // Graceful shutdown
   const shutdown = async () => {
     fastify.log.info('Shutting down...')
     scannerLoop.stop()
+    validatorRunning = false
+    if (validatorTimeoutId) {
+      clearTimeout(validatorTimeoutId)
+    }
     await prisma.$disconnect()
     process.exit(0)
   }

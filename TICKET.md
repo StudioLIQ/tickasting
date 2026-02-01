@@ -163,7 +163,7 @@
 - acceptance 조회로 isAccepted/confirmations/acceptingBlockHash를 가져온다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -505,3 +505,9 @@
   - POST /v1/sales/:saleId/publish (scheduled → live)
   - POST /v1/sales/:saleId/finalize (live → finalizing)
   - Zod validation schemas
+
+- **GP-005** (2026-02-02): Kaspa Adapter 인터페이스 완료
+  - kaspa/types.ts: KaspaAdapter 인터페이스 정의
+  - kaspa/kasfyi-adapter.ts: Kas.fyi API 구현 (retry/backoff 포함)
+  - kaspa/mock-adapter.ts: 테스트용 Mock 어댑터
+  - 8개 mock adapter tests 통과

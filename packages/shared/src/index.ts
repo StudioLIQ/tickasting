@@ -46,3 +46,6 @@ export function kasToSompi(kas: string): bigint {
 
 // Constants
 export const SOMPI_PER_KAS = 100_000_000n
+
+// Kaspa Adapter
+export * from './kaspa/index.js'

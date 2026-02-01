@@ -62,5 +62,15 @@ export {
   parseCommitPayload,
 } from './merkle.js'
 
+// Ticket QR utilities
+export {
+  type TicketQRData,
+  type SignedTicketQR,
+  signTicketData,
+  verifyTicketSignature,
+  encodeTicketQR,
+  decodeTicketQR,
+} from './ticket.js'
+
 // Kaspa Adapter
 export * from './kaspa/index.js'

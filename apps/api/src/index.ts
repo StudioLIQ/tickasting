@@ -5,6 +5,7 @@ import { prisma } from './db.js'
 import { eventsRoutes } from './routes/events.js'
 import { salesRoutes } from './routes/sales.js'
 import { websocketRoutes } from './routes/websocket.js'
+import { scannerRoutes } from './routes/scanner.js'
 
 const PORT = parseInt(process.env['API_PORT'] || '4001', 10)
 const HOST = process.env['API_HOST'] || '0.0.0.0'
@@ -44,6 +45,7 @@ async function main() {
   await fastify.register(eventsRoutes)
   await fastify.register(salesRoutes)
   await fastify.register(websocketRoutes)
+  await fastify.register(scannerRoutes)
 
   // Graceful shutdown
   const shutdown = async () => {

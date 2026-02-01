@@ -10,7 +10,12 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:generate": "pnpm --filter @ghostpass/api db:generate",
+    "db:migrate": "pnpm --filter @ghostpass/api db:migrate",
+    "db:push": "pnpm --filter @ghostpass/api db:push",
+    "db:seed": "pnpm --filter @ghostpass/api db:seed",
+    "db:studio": "pnpm --filter @ghostpass/api db:studio"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

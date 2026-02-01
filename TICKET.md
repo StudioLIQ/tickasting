@@ -81,7 +81,7 @@
 - api가 DB 연결 문제 없이 기동
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -484,3 +484,11 @@
   - infra/docker-compose.yml (PostgreSQL 16 + Redis 7)
   - /health endpoints 구현 및 테스트 완료
   - 포트: web=3000, api=4001, indexer=4002, postgres=5433
+
+- **GP-002** (2026-02-02): Prisma DB 스키마/마이그레이션 완료
+  - Prisma 5.22.0 도입 (apps/api)
+  - 5개 테이블: events, sales, purchase_attempts, tickets, scans
+  - 6개 enum: EventStatus, SaleStatus, ValidationStatus, TicketStatus, ScanResult
+  - seed 스크립트: demo-event-001 + demo-sale-001
+  - API health check에 DB 상태 포함
+  - GET /v1/sales/:saleId 실제 DB 조회로 구현

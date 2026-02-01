@@ -1,0 +1,159 @@
+// GhostPass Prisma Schema
+// Reference: PROJECT.md Section 13
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// Enums
+// ===========================================
+
+enum EventStatus {
+  draft
+  published
+  archived
+}
+
+enum SaleStatus {
+  scheduled
+  live
+  finalizing
+  finalized
+}
+
+enum ValidationStatus {
+  pending
+  valid
+  invalid_wrong_amount
+  invalid_missing_payload
+  invalid_pow
+  invalid_bad_payload
+  invalid_wrong_sale
+}
+
+enum TicketStatus {
+  issued
+  redeemed
+  cancelled
+}
+
+enum ScanResult {
+  ok
+  deny_already_redeemed
+  deny_invalid_ticket
+  deny_wrong_event
+}
+
+// ===========================================
+// Tables
+// ===========================================
+
+model Event {
+  id          String      @id @default(uuid())
+  organizerId String      @map("organizer_id")
+  title       String
+  venue       String?
+  startAt     DateTime?   @map("start_at")
+  endAt       DateTime?   @map("end_at")
+  status      EventStatus @default(draft)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  sales Sale[]
+
+  @@map("events")
+}
+
+model Sale {
+  id               String     @id @default(uuid())
+  eventId          String     @map("event_id")
+  network          String     @default("testnet") // mainnet | testnet
+  treasuryAddress  String     @map("treasury_address")
+  ticketPriceSompi BigInt     @map("ticket_price_sompi")
+  supplyTotal      Int        @map("supply_total")
+  maxPerAddress    Int?       @map("max_per_address")
+  powDifficulty    Int        @default(18) @map("pow_difficulty")
+  finalityDepth    Int        @default(30) @map("finality_depth")
+  startAt          DateTime?  @map("start_at")
+  endAt            DateTime?  @map("end_at")
+  status           SaleStatus @default(scheduled)
+  merkleRoot       String?    @map("merkle_root")
+  commitTxid       String?    @map("commit_txid")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  event            Event              @relation(fields: [eventId], references: [id])
+  purchaseAttempts PurchaseAttempt[]
+  tickets          Ticket[]
+
+  @@map("sales")
+}
+
+model PurchaseAttempt {
+  id                   String           @id @default(uuid())
+  saleId               String           @map("sale_id")
+  txid                 String           @unique
+  detectedAt           DateTime         @default(now()) @map("detected_at")
+  validationStatus     ValidationStatus @default(pending) @map("validation_status")
+  invalidReason        String?          @map("invalid_reason")
+  payloadHex           String?          @map("payload_hex")
+  buyerAddrHash        String?          @map("buyer_addr_hash")
+  accepted             Boolean          @default(false)
+  acceptingBlockHash   String?          @map("accepting_block_hash")
+  acceptingBlueScore   BigInt?          @map("accepting_blue_score")
+  confirmations        Int              @default(0)
+  provisionalRank      Int?             @map("provisional_rank")
+  finalRank            Int?             @map("final_rank")
+  lastCheckedAt        DateTime?        @map("last_checked_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  sale Sale @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+  @@index([saleId, accepted])
+  @@index([saleId, validationStatus])
+  @@map("purchase_attempts")
+}
+
+model Ticket {
+  id            String       @id @default(uuid())
+  saleId        String       @map("sale_id")
+  ownerAddress  String       @map("owner_address")
+  ownerAddrHash String       @map("owner_addr_hash")
+  originTxid    String       @map("origin_txid")
+  status        TicketStatus @default(issued)
+  qrSignature   String?      @map("qr_signature")
+  issuedAt      DateTime     @default(now()) @map("issued_at")
+  redeemedAt    DateTime?    @map("redeemed_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  sale  Sale   @relation(fields: [saleId], references: [id])
+  scans Scan[]
+
+  @@index([saleId])
+  @@index([originTxid])
+  @@map("tickets")
+}
+
+model Scan {
+  id         String     @id @default(uuid())
+  ticketId   String     @map("ticket_id")
+  scannedAt  DateTime   @default(now()) @map("scanned_at")
+  gateId     String?    @map("gate_id")
+  result     ScanResult
+  operatorId String?    @map("operator_id")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("scans")
+}

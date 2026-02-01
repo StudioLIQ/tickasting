@@ -1,8 +1,10 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import websocket from '@fastify/websocket'
 import { prisma } from './db.js'
 import { eventsRoutes } from './routes/events.js'
 import { salesRoutes } from './routes/sales.js'
+import { websocketRoutes } from './routes/websocket.js'
 
 const PORT = parseInt(process.env['API_PORT'] || '4001', 10)
 const HOST = process.env['API_HOST'] || '0.0.0.0'
@@ -19,6 +21,7 @@ async function main() {
   })
 
   await fastify.register(cors, { origin: true })
+  await fastify.register(websocket)
 
   // Health check endpoint with DB status
   fastify.get('/health', async () => {
@@ -40,6 +43,7 @@ async function main() {
   // Register routes
   await fastify.register(eventsRoutes)
   await fastify.register(salesRoutes)
+  await fastify.register(websocketRoutes)
 
   // Graceful shutdown
   const shutdown = async () => {

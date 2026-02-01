@@ -262,7 +262,7 @@
 - 같은 데이터 입력이면 항상 동일한 rank가 나온다(테스트).
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -534,4 +534,13 @@
   - 추적 필드: accepted, acceptingBlockHash, blueScore, confirmations
   - 새로 accepted/final 된 attempts 감지
   - Tracker loop 통합
+  - 8개 unit tests
+
+- **GP-009** (2026-02-02): 결정적 순번 산출 완료
+  - OrderingEngine 클래스: deterministic 랭킹 계산
+  - 정렬 키: acceptingBlueScore ASC, txid lexicographic ASC
+  - provisionalRank: 모든 accepted valid attempts
+  - finalRank: confirmations >= finalityDepth만
+  - getSaleRankings 유틸 함수
+  - Ordering loop 통합
   - 8개 unit tests

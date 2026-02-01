@@ -149,6 +149,102 @@ export async function salesRoutes(fastify: FastifyInstance) {
       })),
     }
   })
+
+  // Get my purchase status by txid
+  fastify.get<{ Params: { saleId: string }; Querystring: { txid: string } }>(
+    '/v1/sales/:saleId/my-status',
+    async (request, reply) => {
+      const { saleId } = request.params
+      const { txid } = request.query
+
+      if (!txid) {
+        reply.status(400)
+        return { error: 'txid query parameter is required' }
+      }
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      const attempt = await prisma.purchaseAttempt.findFirst({
+        where: { saleId, txid },
+      })
+
+      if (!attempt) {
+        return {
+          found: false,
+          saleId,
+          txid,
+          message: 'Transaction not found. It may not have been detected yet.',
+        }
+      }
+
+      return {
+        found: true,
+        saleId,
+        txid: attempt.txid,
+        validationStatus: attempt.validationStatus,
+        invalidReason: attempt.invalidReason,
+        accepted: attempt.accepted,
+        confirmations: attempt.confirmations,
+        provisionalRank: attempt.provisionalRank,
+        finalRank: attempt.finalRank,
+        isWinner:
+          attempt.finalRank !== null && attempt.finalRank <= sale.supplyTotal,
+        acceptingBlockHash: attempt.acceptingBlockHash,
+        detectedAt: attempt.detectedAt.toISOString(),
+        lastCheckedAt: attempt.lastCheckedAt?.toISOString() ?? null,
+      }
+    }
+  )
+
+  // Get sale stats
+  fastify.get<{ Params: { saleId: string } }>(
+    '/v1/sales/:saleId/stats',
+    async (request, reply) => {
+      const { saleId } = request.params
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      const [totalAttempts, validAttempts, acceptedAttempts, finalAttempts] =
+        await Promise.all([
+          prisma.purchaseAttempt.count({ where: { saleId } }),
+          prisma.purchaseAttempt.count({
+            where: { saleId, validationStatus: 'valid' },
+          }),
+          prisma.purchaseAttempt.count({
+            where: { saleId, validationStatus: 'valid', accepted: true },
+          }),
+          prisma.purchaseAttempt.count({
+            where: {
+              saleId,
+              validationStatus: 'valid',
+              accepted: true,
+              confirmations: { gte: sale.finalityDepth },
+            },
+          }),
+        ])
+
+      return {
+        saleId,
+        status: sale.status,
+        supplyTotal: sale.supplyTotal,
+        remaining: Math.max(0, sale.supplyTotal - finalAttempts),
+        totalAttempts,
+        validAttempts,
+        acceptedAttempts,
+        finalAttempts,
+        finalityDepth: sale.finalityDepth,
+        timestamp: new Date().toISOString(),
+      }
+    }
+  )
 }
 
 function formatSale(sale: {

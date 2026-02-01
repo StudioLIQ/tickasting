@@ -449,7 +449,7 @@
 - 같은 티켓 2번 스캔은 deny 처리된다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -586,6 +586,14 @@
   - demo-scenario.ts: 완전한 데모 시나리오
   - README.md: 데모 녹화 가이드 포함
   - N=50+ 봇 시뮬레이션 지원
+
+- **GP-017** (2026-02-02): Scanner MVP 완료
+  - packages/shared/src/ticket.ts: QR 서명/검증 유틸리티
+  - POST /v1/sales/:saleId/tickets/:txid/issue - 티켓 발급
+  - POST /v1/scans/verify - 검증 (읽기 전용)
+  - POST /v1/scans/redeem - 검증 + 사용 처리 (1회성)
+  - apps/web/app/scanner: 웹 스캐너 페이지
+  - 14개 unit tests
 
 - **GP-016** (2026-02-02): README 및 문서 완료
   - README.md 전면 개정: quickstart, env vars, demo steps, API 목록

@@ -4,8 +4,10 @@ import { useState, useEffect, use } from 'react'
 import {
   getSale,
   getAllocation,
+  getMerkleProof,
   type Sale,
   type AllocationSnapshot,
+  type MerkleProofResponse,
 } from '@/lib/api'
 
 interface PageProps {
@@ -24,7 +26,9 @@ export default function ResultsPage({ params }: PageProps) {
     found: boolean
     rank?: number
     isWinner?: boolean
+    merkleProof?: MerkleProofResponse
   } | null>(null)
+  const [loadingProof, setLoadingProof] = useState(false)
 
   // Load data
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function ResultsPage({ params }: PageProps) {
   }, [saleId])
 
   // Search handler
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!allocation || !searchTxid.trim()) {
       setSearchResult(null)
       return
@@ -62,6 +66,17 @@ export default function ResultsPage({ params }: PageProps) {
         rank: winner.finalRank,
         isWinner: true,
       })
+
+      // Fetch merkle proof for winners
+      setLoadingProof(true)
+      try {
+        const proof = await getMerkleProof(saleId, searchTxid.trim())
+        setSearchResult((prev) => (prev ? { ...prev, merkleProof: proof } : null))
+      } catch {
+        // Proof fetch failed, but we still show winner status
+      } finally {
+        setLoadingProof(false)
+      }
     } else {
       setSearchResult({
         found: true,
@@ -171,8 +186,28 @@ export default function ResultsPage({ params }: PageProps) {
           {searchResult && (
             <div className="mt-4">
               {searchResult.isWinner ? (
-                <div className="text-green-400 font-bold">
-                  Congratulations! You are a winner at rank #{searchResult.rank}!
+                <div>
+                  <div className="text-green-400 font-bold mb-2">
+                    Congratulations! You are a winner at rank #{searchResult.rank}!
+                  </div>
+                  {loadingProof && (
+                    <div className="text-gray-400 text-sm">Loading merkle proof...</div>
+                  )}
+                  {searchResult.merkleProof?.found && (
+                    <div className="mt-3 p-3 bg-gray-700/50 rounded text-sm">
+                      <div className="text-gray-300 font-medium mb-2">Merkle Proof</div>
+                      <div className="space-y-1 text-gray-400 font-mono text-xs">
+                        <div>
+                          <span className="text-gray-500">Root:</span>{' '}
+                          {searchResult.merkleProof.merkleRoot?.slice(0, 16)}...
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Proof steps:</span>{' '}
+                          {searchResult.merkleProof.proof?.length ?? 0}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-red-400">
@@ -232,6 +267,47 @@ export default function ResultsPage({ params }: PageProps) {
             </div>
           )}
         </div>
+
+        {/* Merkle Commit Info */}
+        {(allocation.merkleRoot || allocation.commitTxid) && (
+          <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-emerald-400 mb-4">
+              Tamper-Proof Commitment
+            </h3>
+            <div className="space-y-3 text-sm">
+              {allocation.merkleRoot && (
+                <div>
+                  <span className="text-gray-400">Merkle Root:</span>
+                  <div className="font-mono text-xs text-gray-300 mt-1 break-all bg-gray-800/50 p-2 rounded">
+                    {allocation.merkleRoot}
+                  </div>
+                </div>
+              )}
+              {allocation.commitTxid && (
+                <div>
+                  <span className="text-gray-400">Commit Transaction:</span>
+                  <div className="font-mono text-xs mt-1">
+                    <a
+                      href={`https://kas.fyi/transaction/${allocation.commitTxid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-kaspa-primary hover:underline break-all"
+                    >
+                      {allocation.commitTxid}
+                    </a>
+                  </div>
+                </div>
+              )}
+              <p className="text-gray-500 text-xs mt-3">
+                The merkle root is a cryptographic commitment of all winners.
+                {allocation.commitTxid && (
+                  <> It has been permanently recorded on the Kaspa blockchain.</>
+                )}
+                {' '}Any change to the winners list would produce a different merkle root.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Ordering Info */}
         <div className="bg-gray-800/50 rounded-lg p-6 text-sm">

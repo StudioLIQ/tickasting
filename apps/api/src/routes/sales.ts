@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
 import { prisma } from '../db.js'
 import { createSaleSchema } from '../schemas/sales.js'
+import {
+  computeMerkleRoot,
+  generateMerkleProof,
+  type MerkleLeaf,
+} from '@ghostpass/shared'
 
 // Re-implement allocation types locally (shared between api and indexer)
 interface AllocationWinner {
@@ -26,6 +32,8 @@ interface AllocationSnapshot {
   validAttempts: number
   winners: AllocationWinner[]
   losersCount: number
+  merkleRoot: string | null
+  commitTxid: string | null
 }
 
 export async function salesRoutes(fastify: FastifyInstance) {
@@ -267,6 +275,19 @@ export async function salesRoutes(fastify: FastifyInstance) {
           buyerAddrHash: a.buyerAddrHash,
         }))
 
+      // Compute merkle root from winners
+      const merkleLeaves: MerkleLeaf[] = winners.map((w) => ({
+        finalRank: w.finalRank,
+        txid: w.txid,
+        acceptingBlockHash: w.acceptingBlockHash,
+        acceptingBlueScore: w.acceptingBlueScore,
+        buyerAddrHash: w.buyerAddrHash,
+      }))
+      const computedMerkleRoot = winners.length > 0 ? computeMerkleRoot(merkleLeaves) : null
+
+      // If sale has merkle root in DB, use it; otherwise use computed
+      const merkleRoot = sale.merkleRoot ?? computedMerkleRoot
+
       const snapshot: AllocationSnapshot = {
         saleId: sale.id,
         network: sale.network,
@@ -284,6 +305,8 @@ export async function salesRoutes(fastify: FastifyInstance) {
         validAttempts,
         winners,
         losersCount: Math.max(0, attempts.length - sale.supplyTotal),
+        merkleRoot,
+        commitTxid: sale.commitTxid,
       }
 
       return snapshot
@@ -332,6 +355,152 @@ export async function salesRoutes(fastify: FastifyInstance) {
         finalAttempts,
         finalityDepth: sale.finalityDepth,
         timestamp: new Date().toISOString(),
+      }
+    }
+  )
+
+  // Register commit tx for a finalized sale
+  const registerCommitSchema = z.object({
+    commitTxid: z.string().min(1, 'commitTxid is required'),
+  })
+
+  fastify.post<{ Params: { saleId: string } }>(
+    '/v1/sales/:saleId/commit',
+    async (request, reply) => {
+      const { saleId } = request.params
+
+      const parseResult = registerCommitSchema.safeParse(request.body)
+      if (!parseResult.success) {
+        reply.status(400)
+        return { error: 'Validation failed', details: parseResult.error.flatten() }
+      }
+
+      const { commitTxid } = parseResult.data
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      // Must be finalized or finalizing to commit
+      if (sale.status !== 'finalized' && sale.status !== 'finalizing') {
+        reply.status(400)
+        return {
+          error: 'Invalid state',
+          message: `Cannot commit for sale in status '${sale.status}'. Must be 'finalizing' or 'finalized'.`,
+        }
+      }
+
+      // Compute merkle root from winners if not already set
+      let merkleRoot = sale.merkleRoot
+      if (!merkleRoot) {
+        const attempts = await prisma.purchaseAttempt.findMany({
+          where: {
+            saleId,
+            validationStatus: 'valid',
+            accepted: true,
+            confirmations: { gte: sale.finalityDepth },
+          },
+          orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
+        })
+
+        const winners = attempts.slice(0, sale.supplyTotal)
+        const merkleLeaves: MerkleLeaf[] = winners.map((a, i) => ({
+          finalRank: i + 1,
+          txid: a.txid,
+          acceptingBlockHash: a.acceptingBlockHash,
+          acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
+          buyerAddrHash: a.buyerAddrHash,
+        }))
+
+        merkleRoot = winners.length > 0 ? computeMerkleRoot(merkleLeaves) : null
+      }
+
+      // Update sale with commit txid and merkle root
+      const updated = await prisma.sale.update({
+        where: { id: saleId },
+        data: {
+          commitTxid,
+          merkleRoot,
+          status: 'finalized',
+        },
+      })
+
+      return {
+        message: 'Commit transaction registered successfully',
+        saleId: updated.id,
+        merkleRoot: updated.merkleRoot,
+        commitTxid: updated.commitTxid,
+      }
+    }
+  )
+
+  // Get merkle proof for a specific winner
+  fastify.get<{ Params: { saleId: string }; Querystring: { txid: string } }>(
+    '/v1/sales/:saleId/merkle-proof',
+    async (request, reply) => {
+      const { saleId } = request.params
+      const { txid } = request.query
+
+      if (!txid) {
+        reply.status(400)
+        return { error: 'txid query parameter is required' }
+      }
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      // Get all final winners
+      const attempts = await prisma.purchaseAttempt.findMany({
+        where: {
+          saleId,
+          validationStatus: 'valid',
+          accepted: true,
+          confirmations: { gte: sale.finalityDepth },
+        },
+        orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
+      })
+
+      const winners = attempts.slice(0, sale.supplyTotal)
+
+      // Find the requested txid
+      const leafIndex = winners.findIndex((w) => w.txid.toLowerCase() === txid.toLowerCase())
+      if (leafIndex === -1) {
+        return {
+          found: false,
+          txid,
+          message: 'Transaction is not a winner or not yet finalized',
+        }
+      }
+
+      // Build merkle leaves
+      const merkleLeaves: MerkleLeaf[] = winners.map((a, i) => ({
+        finalRank: i + 1,
+        txid: a.txid,
+        acceptingBlockHash: a.acceptingBlockHash,
+        acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
+        buyerAddrHash: a.buyerAddrHash,
+      }))
+
+      // Generate proof
+      const proof = generateMerkleProof(merkleLeaves, leafIndex)
+      if (!proof) {
+        reply.status(500)
+        return { error: 'Failed to generate merkle proof' }
+      }
+
+      return {
+        found: true,
+        txid,
+        finalRank: leafIndex + 1,
+        leaf: merkleLeaves[leafIndex],
+        proof: proof.proof,
+        merkleRoot: proof.root,
+        commitTxid: sale.commitTxid,
       }
     }
   )

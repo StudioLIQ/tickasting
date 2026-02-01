@@ -47,5 +47,20 @@ export function kasToSompi(kas: string): bigint {
 // Constants
 export const SOMPI_PER_KAS = 100_000_000n
 
+// Merkle Tree utilities
+export {
+  type MerkleLeaf,
+  type MerkleProof,
+  computeLeafHash,
+  buildMerkleTree,
+  computeMerkleRoot,
+  generateMerkleProof,
+  verifyMerkleProof,
+  verifyLeafInclusion,
+  formatMerkleRootForPayload,
+  createCommitPayload,
+  parseCommitPayload,
+} from './merkle.js'
+
 // Kaspa Adapter
 export * from './kaspa/index.js'

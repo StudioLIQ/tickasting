@@ -102,12 +102,41 @@ export interface AllocationSnapshot {
   validAttempts: number
   winners: AllocationWinner[]
   losersCount: number
+  merkleRoot: string | null
+  commitTxid: string | null
+}
+
+export interface MerkleProofResponse {
+  found: boolean
+  txid: string
+  finalRank?: number
+  leaf?: {
+    finalRank: number
+    txid: string
+    acceptingBlockHash: string | null
+    acceptingBlueScore: string | null
+    buyerAddrHash: string | null
+  }
+  proof?: Array<{ hash: string; position: 'left' | 'right' }>
+  merkleRoot?: string
+  commitTxid?: string | null
+  message?: string
 }
 
 export async function getAllocation(saleId: string): Promise<AllocationSnapshot> {
   const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/allocation`)
   if (!res.ok) {
     throw new Error(`Failed to fetch allocation: ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function getMerkleProof(saleId: string, txid: string): Promise<MerkleProofResponse> {
+  const res = await fetch(
+    `${config.apiBaseUrl}/v1/sales/${saleId}/merkle-proof?txid=${encodeURIComponent(txid)}`
+  )
+  if (!res.ok) {
+    throw new Error(`Failed to fetch merkle proof: ${res.status}`)
   }
   return res.json()
 }

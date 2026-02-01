@@ -309,7 +309,7 @@
 - UI가 txid/상태를 표시한다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -551,3 +551,10 @@
   - WS /ws/sales/:saleId - 실시간 stats broadcast
   - ping/pong, get_stats, get_my_status 메시지 지원
   - Sale별 연결 풀링
+
+- **GP-011** (2026-02-02): Web 지갑 + 구매 완료
+  - useKasware 훅: 지갑 연결, 계정 관리, sendKaspa
+  - lib/pow.ts: 브라우저 PoW (Web Crypto API)
+  - lib/api.ts: API 클라이언트
+  - app/sales/[saleId]/page.tsx: 구매 페이지
+  - PoW 진행률 표시, 트랜잭션 상태 폴링, 랭크 표시

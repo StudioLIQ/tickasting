@@ -403,7 +403,7 @@
 - 영상 녹화 가이드를 포함한다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -578,6 +578,14 @@
   - Results 페이지에 merkle commit 섹션 추가
   - docs/audit.md 검증 가이드 작성
   - 21개 unit tests
+
+- **GP-015** (2026-02-02): Bot Simulator + Demo Scripts 완료
+  - scripts/bot-sim: 스트레스 테스트 도구
+  - simulate.ts: N개 mock purchase attempts 생성
+  - verify-ordering.ts: 결정적 랭킹 검증
+  - demo-scenario.ts: 완전한 데모 시나리오
+  - README.md: 데모 녹화 가이드 포함
+  - N=50+ 봇 시뮬레이션 지원
 
 - **GP-016** (2026-02-02): README 및 문서 완료
   - README.md 전면 개정: quickstart, env vars, demo steps, API 목록

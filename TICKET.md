@@ -284,7 +284,7 @@
 - my-status 조회가 정상 동작한다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -544,3 +544,10 @@
   - getSaleRankings 유틸 함수
   - Ordering loop 통합
   - 8개 unit tests
+
+- **GP-010** (2026-02-02): Buyer API + WebSocket 완료
+  - GET /v1/sales/:saleId/my-status?txid= - 구매 상태 조회
+  - GET /v1/sales/:saleId/stats - 판매 통계
+  - WS /ws/sales/:saleId - 실시간 stats broadcast
+  - ping/pong, get_stats, get_my_status 메시지 지원
+  - Sale별 연결 풀링

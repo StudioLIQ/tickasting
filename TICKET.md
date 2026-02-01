@@ -220,7 +220,7 @@
 - shared payload/PoW 로직을 사용한다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -519,3 +519,11 @@
   - /health: DB 상태, live sales 카운트 포함
   - /stats: 모니터링 엔드포인트
   - 7개 unit tests (mock adapter)
+
+- **GP-007** (2026-02-02): 구매 트랜잭션 검증 완료
+  - PurchaseValidator 클래스: pending attempts 검증
+  - 검증 규칙: payload(magic/version/saleId), PoW, amount
+  - ValidationStatus: valid/invalid_* 6가지 상태
+  - Validator loop 통합 (scanner 후 실행)
+  - validatePayloadOnly 유틸 함수
+  - 10개 unit tests

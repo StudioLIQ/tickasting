@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import { prisma } from './db.js'
 import { createScannerLoop } from './scanner.js'
 import { PurchaseValidator } from './validator.js'
+import { createAcceptanceTrackerLoop } from './acceptance-tracker.js'
 import { KasFyiAdapter } from '@ghostpass/shared'
 
 const PORT = parseInt(process.env['INDEXER_PORT'] || '4002', 10)
@@ -117,7 +118,12 @@ async function main() {
   // Start validator after a short delay (to let scanner run first)
   setTimeout(runValidatorLoop, 1000)
 
-  fastify.log.info(`Scanner and Validator started with ${POLL_INTERVAL_MS}ms interval`)
+  // Start acceptance tracker loop
+  const acceptanceTrackerLoop = createAcceptanceTrackerLoop(prisma, adapter, POLL_INTERVAL_MS, {
+    logger: indexerLogger,
+  })
+
+  fastify.log.info(`Scanner, Validator, and AcceptanceTracker started with ${POLL_INTERVAL_MS}ms interval`)
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -127,6 +133,7 @@ async function main() {
     if (validatorTimeoutId) {
       clearTimeout(validatorTimeoutId)
     }
+    acceptanceTrackerLoop.stop()
     await prisma.$disconnect()
     process.exit(0)
   }

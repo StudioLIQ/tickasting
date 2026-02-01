@@ -107,7 +107,7 @@
 - payload 예시를 docs에 1개 기록
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -492,3 +492,9 @@
   - seed 스크립트: demo-event-001 + demo-sale-001
   - API health check에 DB 상태 포함
   - GET /v1/sales/:saleId 실제 DB 조회로 구현
+
+- **GP-003** (2026-02-02): Payload/PoW 라이브러리 완료
+  - payload.ts: encode/decode v1 (59 bytes binary → hex)
+  - pow.ts: solvePow, verifyPow, countLeadingZeroBits
+  - address.ts: computeBuyerAddrHash, verifyBuyerAddrHash
+  - 28개 unit tests 통과 (payload 8, pow 14, address 6)

@@ -3,52 +3,35 @@
  * Shared utilities for GhostPass
  */
 
-// Constants
-export const MAGIC = 'GPS1'
-export const PAYLOAD_VERSION = 0x01
-export const POW_ALGO_SHA256 = 0x01
+// Payload encoding/decoding
+export {
+  MAGIC,
+  PAYLOAD_VERSION,
+  POW_ALGO_SHA256,
+  PAYLOAD_LENGTH,
+  type PayloadV1,
+  PayloadError,
+  encodePayload,
+  decodePayload,
+} from './payload.js'
 
-// Types
-export interface PayloadV1 {
-  magic: string
-  version: number
-  saleId: string
-  buyerAddrHash: string
-  clientTimeMs: bigint
-  powAlgo: number
-  powDifficulty: number
-  powNonce: bigint
-}
+// Proof of Work
+export {
+  type PowInput,
+  type PowResult,
+  buildPowMessage,
+  sha256,
+  countLeadingZeroBits,
+  verifyPow,
+  getPowHash,
+  solvePow,
+  estimateHashCount,
+} from './pow.js'
 
-export interface PowInput {
-  saleId: string
-  buyerAddrHash: string
-  difficulty: number
-}
+// Address utilities
+export { computeBuyerAddrHash, verifyBuyerAddrHash } from './address.js'
 
-export interface PowResult {
-  nonce: bigint
-  hash: string
-}
-
-// Placeholder exports (will be implemented in GP-003)
-export function encodePayload(_payload: PayloadV1): string {
-  throw new Error('Not implemented - see GP-003')
-}
-
-export function decodePayload(_hex: string): PayloadV1 {
-  throw new Error('Not implemented - see GP-003')
-}
-
-export function solvePow(_input: PowInput): PowResult {
-  throw new Error('Not implemented - see GP-003')
-}
-
-export function verifyPow(_input: PowInput, _nonce: bigint): boolean {
-  throw new Error('Not implemented - see GP-003')
-}
-
-// Utility
+// KAS <-> Sompi conversion
 export function sompiToKas(sompi: bigint): string {
   const kasWhole = sompi / 100_000_000n
   const kasFrac = sompi % 100_000_000n
@@ -60,3 +43,6 @@ export function kasToSompi(kas: string): bigint {
   const fracPadded = frac.padEnd(8, '0').slice(0, 8)
   return BigInt(whole || '0') * 100_000_000n + BigInt(fracPadded)
 }
+
+// Constants
+export const SOMPI_PER_KAS = 100_000_000n

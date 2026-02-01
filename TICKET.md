@@ -334,7 +334,7 @@
 - Provisional → Final 변화가 보인다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -558,3 +558,8 @@
   - lib/api.ts: API 클라이언트
   - app/sales/[saleId]/page.tsx: 구매 페이지
   - PoW 진행률 표시, 트랜잭션 상태 폴링, 랭크 표시
+
+- **GP-012** (2026-02-02): Live Dashboard 완료
+  - useSaleWebSocket 훅: WebSocket 연결, 자동 재연결
+  - app/sales/[saleId]/live/page.tsx: 라이브 대시보드
+  - 실시간 stats, 진행률 바, 큐 상태 시각화

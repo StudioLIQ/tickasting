@@ -78,3 +78,36 @@ export async function getMyStatus(saleId: string, txid: string): Promise<MyStatu
   }
   return res.json()
 }
+
+export interface AllocationWinner {
+  finalRank: number
+  txid: string
+  acceptingBlockHash: string | null
+  acceptingBlueScore: string | null
+  confirmations: number
+  buyerAddrHash: string | null
+}
+
+export interface AllocationSnapshot {
+  saleId: string
+  network: string
+  treasuryAddress: string
+  ticketPriceSompi: string
+  supplyTotal: number
+  finalityDepth: number
+  pow: { algo: string; difficulty: number }
+  orderingRule: { primary: string; tiebreaker: string }
+  generatedAt: string
+  totalAttempts: number
+  validAttempts: number
+  winners: AllocationWinner[]
+  losersCount: number
+}
+
+export async function getAllocation(saleId: string): Promise<AllocationSnapshot> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/allocation`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch allocation: ${res.status}`)
+  }
+  return res.json()
+}

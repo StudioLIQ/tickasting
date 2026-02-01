@@ -2,6 +2,32 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '../db.js'
 import { createSaleSchema } from '../schemas/sales.js'
 
+// Re-implement allocation types locally (shared between api and indexer)
+interface AllocationWinner {
+  finalRank: number
+  txid: string
+  acceptingBlockHash: string | null
+  acceptingBlueScore: string | null
+  confirmations: number
+  buyerAddrHash: string | null
+}
+
+interface AllocationSnapshot {
+  saleId: string
+  network: string
+  treasuryAddress: string
+  ticketPriceSompi: string
+  supplyTotal: number
+  finalityDepth: number
+  pow: { algo: string; difficulty: number }
+  orderingRule: { primary: string; tiebreaker: string }
+  generatedAt: string
+  totalAttempts: number
+  validAttempts: number
+  winners: AllocationWinner[]
+  losersCount: number
+}
+
 export async function salesRoutes(fastify: FastifyInstance) {
   // Create sale for an event
   fastify.post<{ Params: { eventId: string } }>(
@@ -197,6 +223,70 @@ export async function salesRoutes(fastify: FastifyInstance) {
         detectedAt: attempt.detectedAt.toISOString(),
         lastCheckedAt: attempt.lastCheckedAt?.toISOString() ?? null,
       }
+    }
+  )
+
+  // Get allocation snapshot (winners list)
+  fastify.get<{ Params: { saleId: string } }>(
+    '/v1/sales/:saleId/allocation',
+    async (request, reply) => {
+      const { saleId } = request.params
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      // Get all valid, accepted, final attempts
+      const attempts = await prisma.purchaseAttempt.findMany({
+        where: {
+          saleId,
+          validationStatus: 'valid',
+          accepted: true,
+          confirmations: { gte: sale.finalityDepth },
+        },
+        orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
+      })
+
+      // Get total counts
+      const [totalAttempts, validAttempts] = await Promise.all([
+        prisma.purchaseAttempt.count({ where: { saleId } }),
+        prisma.purchaseAttempt.count({ where: { saleId, validationStatus: 'valid' } }),
+      ])
+
+      // Build winners list
+      const winners: AllocationWinner[] = attempts
+        .slice(0, sale.supplyTotal)
+        .map((a, i) => ({
+          finalRank: i + 1,
+          txid: a.txid,
+          acceptingBlockHash: a.acceptingBlockHash,
+          acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
+          confirmations: a.confirmations,
+          buyerAddrHash: a.buyerAddrHash,
+        }))
+
+      const snapshot: AllocationSnapshot = {
+        saleId: sale.id,
+        network: sale.network,
+        treasuryAddress: sale.treasuryAddress,
+        ticketPriceSompi: sale.ticketPriceSompi.toString(),
+        supplyTotal: sale.supplyTotal,
+        finalityDepth: sale.finalityDepth,
+        pow: { algo: 'sha256', difficulty: sale.powDifficulty },
+        orderingRule: {
+          primary: 'acceptingBlockHash.blueScore asc',
+          tiebreaker: 'txid lexicographic asc',
+        },
+        generatedAt: new Date().toISOString(),
+        totalAttempts,
+        validAttempts,
+        winners,
+        losersCount: Math.max(0, attempts.length - sale.supplyTotal),
+      }
+
+      return snapshot
     }
   )
 

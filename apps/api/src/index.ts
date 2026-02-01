@@ -1,6 +1,8 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { prisma } from './db.js'
+import { eventsRoutes } from './routes/events.js'
+import { salesRoutes } from './routes/sales.js'
 
 const PORT = parseInt(process.env['API_PORT'] || '4001', 10)
 const HOST = process.env['API_HOST'] || '0.0.0.0'
@@ -35,35 +37,9 @@ async function main() {
     }
   })
 
-  // Placeholder routes (will be implemented in later tickets)
-  fastify.get('/v1/sales/:saleId', async (request, reply) => {
-    const { saleId } = request.params as { saleId: string }
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-      include: { event: true },
-    })
-
-    if (!sale) {
-      reply.status(404)
-      return { error: 'Sale not found', saleId }
-    }
-
-    return {
-      id: sale.id,
-      eventId: sale.eventId,
-      eventTitle: sale.event.title,
-      network: sale.network,
-      treasuryAddress: sale.treasuryAddress,
-      ticketPriceSompi: sale.ticketPriceSompi.toString(),
-      supplyTotal: sale.supplyTotal,
-      maxPerAddress: sale.maxPerAddress,
-      powDifficulty: sale.powDifficulty,
-      finalityDepth: sale.finalityDepth,
-      startAt: sale.startAt?.toISOString(),
-      endAt: sale.endAt?.toISOString(),
-      status: sale.status,
-    }
-  })
+  // Register routes
+  await fastify.register(eventsRoutes)
+  await fastify.register(salesRoutes)
 
   // Graceful shutdown
   const shutdown = async () => {

@@ -136,7 +136,7 @@
 - GET /v1/sales/:saleId로 설정값 반환(가격/주소/난이도/finalityDepth 포함)
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -498,3 +498,10 @@
   - pow.ts: solvePow, verifyPow, countLeadingZeroBits
   - address.ts: computeBuyerAddrHash, verifyBuyerAddrHash
   - 28개 unit tests 통과 (payload 8, pow 14, address 6)
+
+- **GP-004** (2026-02-02): Event/Sale CRUD API 완료
+  - routes/events.ts: POST /v1/events, GET /v1/events/:eventId, GET /v1/events
+  - routes/sales.ts: POST /v1/events/:eventId/sales, GET /v1/sales/:saleId
+  - POST /v1/sales/:saleId/publish (scheduled → live)
+  - POST /v1/sales/:saleId/finalize (live → finalizing)
+  - Zod validation schemas

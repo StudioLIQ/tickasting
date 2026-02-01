@@ -357,7 +357,7 @@
 - winners 리스트가 finalRank 기준으로 정확히 1..supply_total이다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -429,7 +429,7 @@
 - 데모 시나리오가 3분 안에 수행 가능
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -563,3 +563,13 @@
   - useSaleWebSocket 훅: WebSocket 연결, 자동 재연결
   - app/sales/[saleId]/live/page.tsx: 라이브 대시보드
   - 실시간 stats, 진행률 바, 큐 상태 시각화
+
+- **GP-013** (2026-02-02): 결과 스냅샷 + Results 페이지 완료
+  - indexer/allocation.ts: AllocationSnapshot 생성
+  - GET /v1/sales/:saleId/allocation 엔드포인트
+  - Results 페이지: 요약, 검색, 당첨자 테이블, JSON 다운로드
+
+- **GP-016** (2026-02-02): README 및 문서 완료
+  - README.md 전면 개정: quickstart, env vars, demo steps, API 목록
+  - .env.example 최신화 (Web 환경변수 추가)
+  - LICENSE (MIT)

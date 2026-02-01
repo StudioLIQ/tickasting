@@ -240,7 +240,7 @@
 - confirmations가 FINALITY_DEPTH를 넘으면 final-ready 상태가 된다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -527,3 +527,11 @@
   - Validator loop 통합 (scanner 후 실행)
   - validatePayloadOnly 유틸 함수
   - 10개 unit tests
+
+- **GP-008** (2026-02-02): Acceptance/Confirmations 추적 완료
+  - AcceptanceTracker 클래스: valid attempts 추적
+  - 배치 API 호출 (configurable batch size)
+  - 추적 필드: accepted, acceptingBlockHash, blueScore, confirmations
+  - 새로 accepted/final 된 attempts 감지
+  - Tracker loop 통합
+  - 8개 unit tests

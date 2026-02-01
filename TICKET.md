@@ -379,7 +379,7 @@
 - 검증 가이드(doc)에 “commit tx payload에서 merkleRoot 확인” 절차가 있다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -568,6 +568,16 @@
   - indexer/allocation.ts: AllocationSnapshot 생성
   - GET /v1/sales/:saleId/allocation 엔드포인트
   - Results 페이지: 요약, 검색, 당첨자 테이블, JSON 다운로드
+
+- **GP-014** (2026-02-02): Merkle Root 생성 + Commit Tx 완료
+  - packages/shared/src/merkle.ts: merkle tree 유틸리티
+  - computeMerkleRoot, generateMerkleProof, verifyMerkleProof
+  - createCommitPayload, parseCommitPayload
+  - POST /v1/sales/:saleId/commit 엔드포인트
+  - GET /v1/sales/:saleId/merkle-proof 엔드포인트
+  - Results 페이지에 merkle commit 섹션 추가
+  - docs/audit.md 검증 가이드 작성
+  - 21개 unit tests
 
 - **GP-016** (2026-02-02): README 및 문서 완료
   - README.md 전면 개정: quickstart, env vars, demo steps, API 목록

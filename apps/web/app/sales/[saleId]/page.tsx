@@ -69,22 +69,28 @@ export default function SalePage({ params }: PageProps) {
     setError(null)
 
     try {
-      // 1. Solve PoW
-      const powResult = await solvePow({
-        saleId: sale.id,
-        buyerAddress: kasware.address,
-        difficulty: sale.powDifficulty,
-        onProgress: (attempts) => {
-          setPowAttempts(attempts)
-          setPowProgress(estimateProgress(attempts, sale.powDifficulty))
-        },
-      })
+      let payloadHex: string | undefined
 
-      // 2. Send transaction
+      // Only compute PoW if fallback mode is disabled
+      if (!sale.fallbackEnabled) {
+        // 1. Solve PoW
+        const powResult = await solvePow({
+          saleId: sale.id,
+          buyerAddress: kasware.address,
+          difficulty: sale.powDifficulty,
+          onProgress: (attempts) => {
+            setPowAttempts(attempts)
+            setPowProgress(estimateProgress(attempts, sale.powDifficulty))
+          },
+        })
+        payloadHex = powResult.payloadHex
+      }
+
+      // 2. Send transaction (with or without payload)
       const txHash = await kasware.sendKaspa(
         sale.treasuryAddress,
         BigInt(sale.ticketPriceSompi),
-        { payload: powResult.payloadHex }
+        payloadHex ? { payload: payloadHex } : undefined
       )
 
       setTxid(txHash)
@@ -158,7 +164,9 @@ export default function SalePage({ params }: PageProps) {
             </div>
             <div>
               <span className="text-gray-400">PoW Difficulty:</span>
-              <span className="ml-2 text-white">{sale.powDifficulty}</span>
+              <span className="ml-2 text-white">
+                {sale.fallbackEnabled ? 'N/A (Fallback Mode)' : sale.powDifficulty}
+              </span>
             </div>
             <div>
               <span className="text-gray-400">Network:</span>
@@ -230,20 +238,36 @@ export default function SalePage({ params }: PageProps) {
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <h3 className="text-lg font-semibold mb-4">Purchase</h3>
 
+            {/* Fallback mode notice */}
+            {sale.fallbackEnabled && (
+              <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded text-sm text-yellow-300">
+                <strong>Fallback Mode:</strong> This sale accepts transactions without PoW payload.
+                Your wallet may not support payload - the transaction will still be processed.
+              </div>
+            )}
+
             {purchasing ? (
               <div className="space-y-4">
-                <div className="text-sm text-gray-400">
-                  Computing Proof of Work...
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-kaspa-primary h-2 rounded-full transition-all"
-                    style={{ width: `${powProgress}%` }}
-                  />
-                </div>
-                <div className="text-xs text-gray-500">
-                  {powAttempts.toLocaleString()} attempts ({powProgress.toFixed(1)}%)
-                </div>
+                {sale.fallbackEnabled ? (
+                  <div className="text-sm text-gray-400">
+                    Sending transaction...
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm text-gray-400">
+                      Computing Proof of Work...
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-kaspa-primary h-2 rounded-full transition-all"
+                        style={{ width: `${powProgress}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {powAttempts.toLocaleString()} attempts ({powProgress.toFixed(1)}%)
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <button
@@ -277,7 +301,7 @@ export default function SalePage({ params }: PageProps) {
                     <span className="text-gray-400">Status:</span>
                     <span
                       className={`ml-2 ${
-                        myStatus.validationStatus === 'valid'
+                        myStatus.validationStatus === 'valid' || myStatus.validationStatus === 'valid_fallback'
                           ? 'text-green-400'
                           : myStatus.validationStatus === 'pending'
                             ? 'text-yellow-400'
@@ -285,6 +309,9 @@ export default function SalePage({ params }: PageProps) {
                       }`}
                     >
                       {myStatus.validationStatus}
+                      {myStatus.isFallback && (
+                        <span className="ml-1 text-xs text-yellow-400">(No PoW)</span>
+                      )}
                     </span>
                   </div>
                   <div>
@@ -337,11 +364,23 @@ export default function SalePage({ params }: PageProps) {
           <h3 className="font-semibold mb-2 text-gray-300">How It Works</h3>
           <ol className="list-decimal list-inside space-y-1">
             <li>Connect your KasWare wallet</li>
-            <li>Your browser computes a Proof of Work (anti-bot measure)</li>
-            <li>Transaction is sent with the PoW payload</li>
+            {sale.fallbackEnabled ? (
+              <li>Send the exact ticket price to the treasury address</li>
+            ) : (
+              <>
+                <li>Your browser computes a Proof of Work (anti-bot measure)</li>
+                <li>Transaction is sent with the PoW payload</li>
+              </>
+            )}
             <li>Your rank is determined by on-chain acceptance order</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
           </ol>
+          {sale.fallbackEnabled && (
+            <p className="mt-3 text-yellow-400/80 text-xs">
+              Note: Fallback mode is enabled. Transactions without PoW payload are accepted,
+              but this provides less anti-bot protection.
+            </p>
+          )}
         </div>
       </div>
     </main>

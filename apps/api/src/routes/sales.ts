@@ -68,6 +68,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
           maxPerAddress: data.maxPerAddress,
           powDifficulty: data.powDifficulty,
           finalityDepth: data.finalityDepth,
+          fallbackEnabled: data.fallbackEnabled,
           startAt: data.startAt ? new Date(data.startAt) : null,
           endAt: data.endAt ? new Date(data.endAt) : null,
           status: 'scheduled',
@@ -227,6 +228,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
         finalRank: attempt.finalRank,
         isWinner:
           attempt.finalRank !== null && attempt.finalRank <= sale.supplyTotal,
+        isFallback: attempt.validationStatus === 'valid_fallback',
         acceptingBlockHash: attempt.acceptingBlockHash,
         detectedAt: attempt.detectedAt.toISOString(),
         lastCheckedAt: attempt.lastCheckedAt?.toISOString() ?? null,
@@ -247,10 +249,11 @@ export async function salesRoutes(fastify: FastifyInstance) {
       }
 
       // Get all valid, accepted, final attempts
+      // Include both 'valid' and 'valid_fallback' statuses
       const attempts = await prisma.purchaseAttempt.findMany({
         where: {
           saleId,
-          validationStatus: 'valid',
+          validationStatus: { in: ['valid', 'valid_fallback'] },
           accepted: true,
           confirmations: { gte: sale.finalityDepth },
         },
@@ -260,7 +263,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
       // Get total counts
       const [totalAttempts, validAttempts] = await Promise.all([
         prisma.purchaseAttempt.count({ where: { saleId } }),
-        prisma.purchaseAttempt.count({ where: { saleId, validationStatus: 'valid' } }),
+        prisma.purchaseAttempt.count({ where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] } } }),
       ])
 
       // Build winners list
@@ -329,15 +332,15 @@ export async function salesRoutes(fastify: FastifyInstance) {
         await Promise.all([
           prisma.purchaseAttempt.count({ where: { saleId } }),
           prisma.purchaseAttempt.count({
-            where: { saleId, validationStatus: 'valid' },
+            where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] } },
           }),
           prisma.purchaseAttempt.count({
-            where: { saleId, validationStatus: 'valid', accepted: true },
+            where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] }, accepted: true },
           }),
           prisma.purchaseAttempt.count({
             where: {
               saleId,
-              validationStatus: 'valid',
+              validationStatus: { in: ['valid', 'valid_fallback'] },
               accepted: true,
               confirmations: { gte: sale.finalityDepth },
             },
@@ -398,7 +401,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
         const attempts = await prisma.purchaseAttempt.findMany({
           where: {
             saleId,
-            validationStatus: 'valid',
+            validationStatus: { in: ['valid', 'valid_fallback'] },
             accepted: true,
             confirmations: { gte: sale.finalityDepth },
           },
@@ -458,7 +461,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
       const attempts = await prisma.purchaseAttempt.findMany({
         where: {
           saleId,
-          validationStatus: 'valid',
+          validationStatus: { in: ['valid', 'valid_fallback'] },
           accepted: true,
           confirmations: { gte: sale.finalityDepth },
         },
@@ -516,6 +519,7 @@ function formatSale(sale: {
   maxPerAddress: number | null
   powDifficulty: number
   finalityDepth: number
+  fallbackEnabled: boolean
   startAt: Date | null
   endAt: Date | null
   status: string
@@ -533,6 +537,7 @@ function formatSale(sale: {
     maxPerAddress: sale.maxPerAddress,
     powDifficulty: sale.powDifficulty,
     finalityDepth: sale.finalityDepth,
+    fallbackEnabled: sale.fallbackEnabled,
     startAt: sale.startAt?.toISOString() ?? null,
     endAt: sale.endAt?.toISOString() ?? null,
     status: sale.status,

@@ -21,6 +21,7 @@ const testSale: Sale = {
   maxPerAddress: null,
   powDifficulty: 18,
   finalityDepth: 30,
+  fallbackEnabled: false,
   startAt: new Date(),
   endAt: new Date(Date.now() + 86400000),
   status: 'live',

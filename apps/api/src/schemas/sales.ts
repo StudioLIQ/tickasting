@@ -8,6 +8,7 @@ export const createSaleSchema = z.object({
   maxPerAddress: z.number().int().positive().optional(),
   powDifficulty: z.number().int().min(0).max(32).default(18),
   finalityDepth: z.number().int().min(1).max(100).default(30),
+  fallbackEnabled: z.boolean().default(false),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
 })

@@ -14,6 +14,7 @@ export interface Sale {
   maxPerAddress: number | null
   powDifficulty: number
   finalityDepth: number
+  fallbackEnabled: boolean
   startAt: string | null
   endAt: string | null
   status: string
@@ -34,6 +35,7 @@ export interface MyStatus {
   provisionalRank?: number | null
   finalRank?: number | null
   isWinner?: boolean
+  isFallback?: boolean
   acceptingBlockHash?: string | null
   detectedAt?: string
   lastCheckedAt?: string | null

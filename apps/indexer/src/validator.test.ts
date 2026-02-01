@@ -22,6 +22,7 @@ const testSale: Sale = {
   maxPerAddress: null,
   powDifficulty: 8, // Low difficulty for tests
   finalityDepth: 30,
+  fallbackEnabled: false,
   startAt: new Date(),
   endAt: new Date(Date.now() + 86400000),
   status: 'live',

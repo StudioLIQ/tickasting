@@ -117,6 +117,26 @@ export class PurchaseValidator {
       // 2. Check payload exists
       const payloadHex = attempt.payloadHex ?? tx?.payload
       if (!payloadHex) {
+        // Check if fallback mode is enabled for this sale
+        if (sale.fallbackEnabled) {
+          // Fallback mode: validate amount only, no payload/PoW required
+          if (!tx) {
+            tx = await this.adapter.getTransactionDetails(attempt.txid, true)
+          }
+          if (tx) {
+            const amountValid = this.validateAmount(tx, sale.treasuryAddress, sale.ticketPriceSompi)
+            if (!amountValid) {
+              result.status = 'invalid_wrong_amount'
+              result.invalidReason = `Amount mismatch: expected ${sale.ticketPriceSompi} sompi to ${sale.treasuryAddress}`
+              return result
+            }
+          }
+          // Mark as valid_fallback (no PoW verification)
+          result.status = 'valid_fallback' as ValidationStatus
+          result.buyerAddrHash = null // No buyer address hash in fallback mode
+          this.config.logger.debug(`Validated attempt ${attempt.txid}: valid_fallback (no payload)`)
+          return result
+        }
         result.status = 'invalid_missing_payload'
         result.invalidReason = 'No payload in transaction'
         return result

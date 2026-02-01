@@ -90,10 +90,11 @@ export class AcceptanceTracker {
     try {
       // Get all valid attempts that need tracking
       // (not yet final, meaning confirmations < finalityDepth)
+      // Include both 'valid' and 'valid_fallback' statuses
       const attempts = await this.prisma.purchaseAttempt.findMany({
         where: {
           saleId: sale.id,
-          validationStatus: 'valid',
+          validationStatus: { in: ['valid', 'valid_fallback'] },
           OR: [
             { accepted: false },
             { confirmations: { lt: sale.finalityDepth } },

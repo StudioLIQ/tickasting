@@ -470,7 +470,7 @@
 - 다만 PoW가 없음을 명확히 표시한다.
 
 #### Status
-- [ ] Done
+- [x] Done (2026-02-02)
 
 ---
 
@@ -599,3 +599,12 @@
   - README.md 전면 개정: quickstart, env vars, demo steps, API 목록
   - .env.example 최신화 (Web 환경변수 추가)
   - LICENSE (MIT)
+
+- **GP-018** (2026-02-02): Fallback 모드 구현 완료
+  - DB 스키마: sales 테이블에 `fallback_enabled` 필드 추가
+  - ValidationStatus enum에 `valid_fallback` 상태 추가
+  - Indexer validator: fallback 모드에서 payload 없이 amount만 검증
+  - API: sale 생성/조회 시 fallbackEnabled 지원
+  - Web: fallback 모드 안내 UI, PoW 스킵 로직
+  - acceptance-tracker, ordering: valid_fallback 상태 처리
+  - 33개 indexer 테스트, 71개 shared 테스트 통과

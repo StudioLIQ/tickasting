@@ -30,6 +30,7 @@ enum SaleStatus {
 enum ValidationStatus {
   pending
   valid
+  valid_fallback
   invalid_wrong_amount
   invalid_missing_payload
   invalid_pow
@@ -80,6 +81,7 @@ model Sale {
   maxPerAddress    Int?       @map("max_per_address")
   powDifficulty    Int        @default(18) @map("pow_difficulty")
   finalityDepth    Int        @default(30) @map("finality_depth")
+  fallbackEnabled  Boolean    @default(false) @map("fallback_enabled")
   startAt          DateTime?  @map("start_at")
   endAt            DateTime?  @map("end_at")
   status           SaleStatus @default(scheduled)

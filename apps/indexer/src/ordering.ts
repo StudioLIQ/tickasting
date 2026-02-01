@@ -103,10 +103,11 @@ export class OrderingEngine {
 
     try {
       // Get all valid, accepted attempts for this sale
+      // Include both 'valid' and 'valid_fallback' statuses
       const attempts = await this.prisma.purchaseAttempt.findMany({
         where: {
           saleId: sale.id,
-          validationStatus: 'valid',
+          validationStatus: { in: ['valid', 'valid_fallback'] },
           accepted: true,
         },
       })
@@ -247,12 +248,12 @@ export async function getSaleRankings(
 
   const where: {
     saleId: string
-    validationStatus: 'valid'
+    validationStatus: { in: Array<'valid' | 'valid_fallback'> }
     accepted: true
     confirmations?: { gte: number }
   } = {
     saleId,
-    validationStatus: 'valid',
+    validationStatus: { in: ['valid', 'valid_fallback'] },
     accepted: true,
   }
 

@@ -1,7 +1,7 @@
 ## TICKET.md
 
 ```md
-# GhostPass — TICKET Backlog (순차 실행용)
+# Tickasting — TICKET Backlog (순차 실행용)
 
 ## 0) 사용법(중요)
 - 이 파일은 “실행 순서”다. 위에서 아래로 처리한다.
@@ -474,6 +474,403 @@
 
 ---
 
+## 3.1) Contract + Multi Ticket Types (신규 에픽)
+
+> 목표: Tickasting를 “오프체인 정렬 + 온체인 티켓 클래스/클레임” 구조로 확장한다.  
+> 핵심: 한 판매(sale) 안에 여러 티켓 타입(VIP/R/스탠딩 등)을 두고, 최종 당첨자는 컨트랙트에서 타입별 티켓을 claim/mint 할 수 있어야 한다.
+
+### GP-019 — Contract 트랙 결정 + 인터페이스 고정
+- Priority: P0
+- Dependencies: GP-018
+- Goal: 컨트랙트 구현 전에 체인/표준/인터페이스를 고정한다.
+
+#### Tasks
+- 컨트랙트 트랙 결정:
+  - A안) Kaspa 네이티브/KRC 계열
+  - B안) EVM 계열 테스트넷(브릿지/앳테스테이션 연동)
+- 최소 ABI/이벤트 스펙 문서화:
+  - `createSale`
+  - `defineTicketType`
+  - `openClaim`
+  - `claimTicket`
+  - `finalizeSale`
+- 오프체인 엔진과 컨트랙트 경계 정의(무엇을 체인에 기록/검증할지)
+- `docs/contract-spec.md` 신규 작성
+
+#### Acceptance Criteria
+- 팀이 사용할 컨트랙트 트랙이 1개로 확정됨
+- ABI/이벤트 초안이 문서에 고정됨
+- 이후 티켓에서 참조 가능한 주소/네이밍 규칙이 정리됨
+
+#### Status
+- [x] Done (2026-02-14)
+
+---
+
+### GP-020 — DB 스키마: 멀티 티켓 타입 모델링
+- Priority: P0
+- Dependencies: GP-019
+- Goal: sale 하위에 티켓 타입을 저장하고 시도/발급/클레임이 타입 단위로 연결되게 만든다.
+
+#### Tasks
+- Prisma 스키마 추가:
+  - `ticket_types` (saleId, code, name, priceSompi, supply, metadataUri, sortOrder)
+  - `tickets.ticketTypeId` FK
+  - `purchase_attempts.requestedTicketTypeId` FK(nullable)
+- 타입별 공급량/잔여량 계산 쿼리 반영
+- seed 데이터에 2~3개 티켓 타입(VIP/R/GEN) 추가
+
+#### Acceptance Criteria
+- migration 적용 후 sale별 ticket types 조회 가능
+- 티켓 발급 레코드가 ticket type과 연결됨
+- 기존 단일 타입 sale도 깨지지 않음(기본 타입 자동 처리 또는 nullable 대응)
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-021 — Organizer API: 티켓 타입 CRUD + 판매 생성 확장
+- Priority: P0
+- Dependencies: GP-020
+- Goal: Organizer가 sale 생성 시 여러 티켓 타입을 함께 정의할 수 있게 한다.
+
+#### Tasks
+- API 확장:
+  - `POST /v1/events/:eventId/sales`에 `ticketTypes[]` 입력 지원
+  - `GET /v1/sales/:saleId/ticket-types`
+  - `POST /v1/sales/:saleId/ticket-types`
+  - `PATCH /v1/sales/:saleId/ticket-types/:ticketTypeId`
+- 검증 규칙:
+  - 타입별 `priceSompi > 0`, `supply > 0`
+  - 타입 합계 공급량과 sale 공급 정책 일관성 체크
+  - 중복 code 금지
+
+#### Acceptance Criteria
+- 하나의 sale에 최소 2개 타입 생성 가능
+- API 응답에 타입별 가격/공급량/잔여량 포함
+- 잘못된 타입 구성은 4xx로 명확히 거절
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-022 — Contracts 패키지 스캐폴딩 + 배포 파이프라인
+- Priority: P0
+- Dependencies: GP-019
+- Goal: 레포에 컨트랙트 패키지를 추가하고 testnet 배포 자동화를 마련한다.
+
+#### Tasks
+- `contracts/` 워크스페이스 추가(선택 툴체인: Foundry/Hardhat 중 1개)
+- compile/test/deploy 스크립트 추가
+- ABI 산출물을 `packages/shared` 또는 `apps/api`에서 읽을 수 있게 export
+- `.env.example`에 계약 주소/배포키 변수 추가(실키는 커밋 금지)
+
+#### Acceptance Criteria
+- 로컬에서 컨트랙트 컴파일/테스트가 돌아감
+- testnet 배포 명령 1개로 컨트랙트 주소를 얻을 수 있음
+- ABI 버전이 앱 코드와 동기화됨
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-023 — Smart Contract: Sale + TicketType + Claim/Mint
+- Priority: P0
+- Dependencies: GP-022
+- Goal: 타입별 공급량을 가진 티켓을 온체인에서 claim/mint 처리한다.
+
+#### Tasks
+- core contract 구현:
+  - sale 생성/상태 관리
+  - ticket type 등록(가격/공급량/메타데이터)
+  - winner claim 시 타입별 mint
+- 접근제어(organizer/admin), 재진입/중복클레임 방지
+- 이벤트:
+  - `SaleCreated`
+  - `TicketTypeDefined`
+  - `ClaimOpened`
+  - `TicketClaimed`
+  - `SaleFinalized`
+
+#### Acceptance Criteria
+- testnet에서 타입별 claim/mint 성공
+- 타입별 공급량 초과 mint 불가
+- 동일 winner의 중복 claim 차단
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-024 — Indexer/API: 컨트랙트 이벤트 연동 + 정산 동기화
+- Priority: P1
+- Dependencies: GP-023
+- Goal: 오프체인 랭킹 결과와 온체인 claim/mint 상태를 동기화한다.
+
+#### Tasks
+- indexer에 contract event consumer 추가
+- DB에 on-chain claim 상태/tx hash/토큰ID 저장
+- 오프체인 winner 목록과 온체인 mint 결과 정합성 체크 job 추가
+- mismatch 알림 로그/대시보드 추가
+
+#### Acceptance Criteria
+- claim 발생 시 API/Web 상태가 실시간 반영
+- mismatch 탐지 케이스에서 운영자 알림 확인 가능
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-025 — Web: 티켓 타입 선택 + Claim UX
+- Priority: P1
+- Dependencies: GP-021, GP-023, GP-024
+- Goal: 구매/결과/클레임 화면에서 타입별 UX를 제공한다.
+
+#### Tasks
+- sale 페이지에 타입 카드(VIP/R/GEN) 노출
+- 타입별 가격/재고/품절 상태 표시
+- winner 전용 claim 버튼 + 지갑 트랜잭션 처리
+- claim 완료 후 티켓 상세(타입/토큰ID/QR) 표시
+
+#### Acceptance Criteria
+- 사용자 관점에서 타입 선택 → 당첨 확인 → claim 완료까지 1개 플로우로 동작
+- 품절 타입 선택 불가
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-026 — 배포/운영 문서 업데이트 (Contract 포함)
+- Priority: P1
+- Dependencies: GP-022, GP-023
+- Goal: 운영 문서를 “FE=Vercel, BE/DB=Railway, Contract=testnet” 기준으로 최종 정리한다.
+
+#### Tasks
+- `DEPLOY.md`에 컨트랙트 compile/deploy/env/address 등록 절차 추가
+- `LOCAL.md`에 로컬 컨트랙트 테스트 및 testnet dry-run 절차 추가
+- 데모 체크리스트에 “컨트랙트 주소/클레임 스모크 테스트” 항목 추가
+
+#### Acceptance Criteria
+- 신규 팀원이 문서만 보고 컨트랙트 포함 데모 환경 재현 가능
+- 배포 체크리스트로 claim까지 검증 가능
+
+#### Status
+- [ ] Todo
+
+---
+
+## 3.2) Ponder + Railway + FE/BE 동기화 (신규 에픽)
+
+> 목표: 인덱싱 계층을 `apps/indexer` 커스텀 루프에서 **Ponder 기반**으로 전환하고,  
+> FE/BE/API/배포를 Railway(Postgres) 운영 구조에 맞게 한 번에 정렬한다.
+
+### GP-027 — 아키텍처 확정: API + Ponder + Postgres(Railway)
+- Priority: P0
+- Dependencies: GP-019
+- Goal: 런타임 토폴로지를 공식화하고, deprecated 경로를 명확히 지정한다.
+
+#### Tasks
+- 아키텍처 결정 문서화:
+  - FE: Vercel
+  - BE API: Railway
+  - DB: Railway Postgres (single source of truth)
+  - Indexing: Ponder worker/service
+- 기존 `apps/indexer`의 역할을 `deprecated`로 명시
+- 데이터 소스 책임 분리:
+  - Ponder: 체인 이벤트/트랜잭션 인덱싱
+  - API: 도메인 로직/권한/집계 응답
+
+#### Acceptance Criteria
+- `PROJECT.md`와 `DEPLOY.md`에 목표 아키텍처가 일치하게 반영됨
+- 팀 내 “indexing은 Ponder로 간다” 결정이 문서로 고정됨
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-028 — Ponder 앱 스캐폴딩 + 워크스페이스 편입
+- Priority: P0
+- Dependencies: GP-027
+- Goal: 레포에 Ponder 런타임을 추가하고 dev/build/run 가능한 상태를 만든다.
+
+#### Tasks
+- `apps/ponder` (또는 `apps/indexer-ponder`) 생성
+- `ponder.config` + schema + indexing entrypoint 작성
+- `pnpm-workspace.yaml`, turbo tasks에 ponder 앱 반영
+- `pnpm dev` 시 api/web + ponder 동시 기동 옵션 제공
+
+#### Acceptance Criteria
+- 로컬에서 Ponder가 Postgres에 연결되어 기동됨
+- 기본 health/log 확인 가능
+- CI에서 ponder build/typecheck가 통과
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-029 — Contract 이벤트 인덱싱(Ponder) 구현
+- Priority: P0
+- Dependencies: GP-023, GP-028
+- Goal: sale/ticketType/claim/mint 이벤트를 Ponder가 표준 테이블로 적재한다.
+
+#### Tasks
+- 인덱싱 대상 이벤트 매핑:
+  - `SaleCreated`
+  - `TicketTypeDefined`
+  - `ClaimOpened`
+  - `TicketClaimed`
+  - `SaleFinalized`
+- Ponder schema 설계:
+  - sales_onchain
+  - ticket_types_onchain
+  - claims_onchain
+  - token_ownership (필요 시)
+- reorg-safe upsert/idempotency 처리
+
+#### Acceptance Criteria
+- testnet 이벤트 발생 시 Postgres에 지연 없이 반영됨
+- 동일 블록 재처리/재기동 시 중복 데이터가 쌓이지 않음
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-030 — BE(API) 리팩터: Ponder 테이블 기반 조회/상태 동기화
+- Priority: P0
+- Dependencies: GP-029
+- Goal: API가 기존 커스텀 indexer 의존을 제거하고 Ponder 결과를 사용하게 한다.
+
+#### Tasks
+- 조회/집계 쿼리 경로를 Ponder 테이블 기반으로 교체
+- claim 상태/토큰ID/소유자 조회 endpoint 정비
+- 기존 `apps/indexer` 관련 코드 경로 단계적 제거 플래그 추가
+- 데이터 정합성 체크(job 또는 endpoint) 추가
+
+#### Acceptance Criteria
+- 핵심 API 응답이 Ponder 인덱싱 결과와 일치
+- claim 이후 FE에서 상태 지연 없이 반영
+- `apps/indexer` 미기동 상태에서도 주요 흐름 동작
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-031 — FE 업데이트: 멀티 티켓 타입 + 온체인 Claim UX
+- Priority: P0
+- Dependencies: GP-021, GP-030
+- Goal: 프론트가 타입 선택/상태/클레임/완료 티켓을 일관된 플로우로 제공한다.
+
+#### Tasks
+- sale 상세에 ticket type 카드/재고/가격 노출
+- 당첨자 전용 claim CTA + tx 진행 상태 표시
+- claim 완료 후 tokenId/owner/QR 표시
+- live/results 페이지에 타입별 통계 추가
+
+#### Acceptance Criteria
+- 사용자 플로우: 타입 인지 → 구매/대기 → 당첨 확인 → claim 완료가 끊김 없이 동작
+- 실패 케이스(revert, already claimed, sold out) UX가 명확함
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-032 — Railway 배포 토폴로지 반영 (API + Ponder + Postgres)
+- Priority: P0
+- Dependencies: GP-028, GP-030
+- Goal: Railway 운영 배포를 Ponder 포함 구조로 고정한다.
+
+#### Tasks
+- Railway 서비스 구성:
+  - `tickasting-api`
+  - `tickasting-ponder`
+  - `tickasting-postgres`
+- Build/Start 명령, env vars 문서화
+- 헬스체크 및 재시작 정책 정의
+- 초기 sync/replay 운영 절차(runbook) 작성
+
+#### Acceptance Criteria
+- Railway에서 API/Ponder/Postgres 3서비스 정상 기동
+- 재배포/재시작 후 인덱싱 재개가 안정적
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-033 — 데이터 마이그레이션: Legacy indexer -> Ponder
+- Priority: P1
+- Dependencies: GP-030
+- Goal: 기존 데이터와 신규 인덱싱 데이터의 연속성을 보장한다.
+
+#### Tasks
+- 마이그레이션 전략:
+  - full reindex vs checkpoint 기준 incremental
+- 백필 스크립트 작성
+- 이행 기간 이중 기록/검증 모드(선택) 구현
+- 컷오버 체크리스트 작성
+
+#### Acceptance Criteria
+- 컷오버 후 API 결과가 이전 대비 의미 있게 일치
+- 데이터 유실/중복 없이 전환 완료
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-034 — 관측성/운영: Ponder 인덱싱 모니터링 + 장애대응
+- Priority: P1
+- Dependencies: GP-032
+- Goal: 운영에서 인덱싱 지연/중단을 빠르게 감지하고 복구 가능하게 만든다.
+
+#### Tasks
+- 핵심 메트릭 정의:
+  - last indexed block
+  - chain head gap
+  - processing lag
+  - failed handler count
+- 알람 룰/로그 필드 표준화
+- 장애 대응 runbook(재동기화, 특정 블록 재처리) 문서화
+
+#### Acceptance Criteria
+- 인덱싱 중단 시 5분 내 감지 가능한 알람 체계 확보
+- 운영자가 문서만 보고 재동기화를 수행 가능
+
+#### Status
+- [ ] Todo
+
+---
+
+### GP-035 — Legacy Indexer 제거 + 코드 정리
+- Priority: P1
+- Dependencies: GP-030, GP-032, GP-033
+- Goal: `apps/indexer` 기반 경로를 정식 제거하고 Ponder 단일 경로로 수렴한다.
+
+#### Tasks
+- `apps/indexer` 의존 스크립트/문서/환경변수 제거
+- API의 legacy fallback code 제거
+- CI 파이프라인에서 legacy indexer job 제거
+- README/DEPLOY/LOCAL 최종 정리
+
+#### Acceptance Criteria
+- 배포/로컬 어디에서도 `apps/indexer` 없이 동작
+- 문서/스크립트/CI가 Ponder 기준으로 일관됨
+
+#### Status
+- [ ] Todo
+
+---
+
 ## 4) 완료 로그(자동 기록 영역)
 (Claude가 완료 시 여기에 누적 기록)
 
@@ -608,3 +1005,13 @@
   - Web: fallback 모드 안내 UI, PoW 스킵 로직
   - acceptance-tracker, ordering: valid_fallback 상태 처리
   - 33개 indexer 테스트, 71개 shared 테스트 통과
+
+- **GP-019** (2026-02-14): Contract 트랙 결정 + 인터페이스 고정
+  - Track: EVM Testnet (Sepolia) + Hardhat + Solidity (ERC-721)
+  - Rationale: Kaspa에 범용 스마트 컨트랙트 VM 부재, EVM은 성숙한 툴링 제공
+  - Hybrid architecture: Kaspa(공정 순번) + EVM(소유권 확정)
+  - Contract: TickastingSale (ERC-721 + Merkle proof claim)
+  - ABI: createSale, defineTicketType, openClaim, claimTicket, finalizeSale
+  - Events: SaleCreated, TicketTypeDefined, ClaimOpened, TicketClaimed, SaleFinalized
+  - Merkle leaf: keccak256(claimer, ticketTypeCode, kaspaTxid, finalRank)
+  - docs/contract-spec.md 전면 개정, .env.example 업데이트

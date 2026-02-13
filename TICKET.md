@@ -552,7 +552,7 @@
 - 잘못된 타입 구성은 4xx로 명확히 거절
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1024,3 +1024,12 @@
   - @@unique([saleId, code]) 제약조건
   - Seed: VIP (5 KAS, 10장), R (2 KAS, 40장), GEN (1 KAS, 50장)
   - Migration 적용 + 71 shared tests, 33 indexer tests 통과
+
+- **GP-021** (2026-02-14): Organizer API 티켓 타입 CRUD 완료
+  - Sale 생성 시 ticketTypes[] 입력 지원 (inline creation)
+  - GET /v1/sales/:saleId/ticket-types (타입별 가격/공급량/잔여량)
+  - POST /v1/sales/:saleId/ticket-types (개별 타입 추가)
+  - PATCH /v1/sales/:saleId/ticket-types/:ticketTypeId (타입 수정)
+  - 검증: 중복 code 409, 비공개 sale만 수정 가능, priceSompi/supply 양수
+  - GET /v1/sales/:saleId 응답에 ticketTypes 포함
+  - Zod 스키마: ticketTypeSchema, updateTicketTypeSchema 추가

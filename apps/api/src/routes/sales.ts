@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
-import { createSaleSchema } from '../schemas/sales.js'
+import { createSaleSchema, ticketTypeSchema, updateTicketTypeSchema } from '../schemas/sales.js'
 import {
   computeMerkleRoot,
   generateMerkleProof,
   type MerkleLeaf,
-} from '@ghostpass/shared'
+} from '@tickasting/shared'
 
 // Re-implement allocation types locally (shared between api and indexer)
 interface AllocationWinner {
@@ -58,6 +58,16 @@ export async function salesRoutes(fastify: FastifyInstance) {
 
       const data = parseResult.data
 
+      // Validate ticket type codes are unique if provided
+      if (data.ticketTypes && data.ticketTypes.length > 0) {
+        const codes = data.ticketTypes.map((tt) => tt.code)
+        const uniqueCodes = new Set(codes)
+        if (uniqueCodes.size !== codes.length) {
+          reply.status(400)
+          return { error: 'Duplicate ticket type codes are not allowed' }
+        }
+      }
+
       const sale = await prisma.sale.create({
         data: {
           eventId,
@@ -72,11 +82,25 @@ export async function salesRoutes(fastify: FastifyInstance) {
           startAt: data.startAt ? new Date(data.startAt) : null,
           endAt: data.endAt ? new Date(data.endAt) : null,
           status: 'scheduled',
+          ticketTypes: data.ticketTypes
+            ? {
+                create: data.ticketTypes.map((tt, i) => ({
+                  code: tt.code,
+                  name: tt.name,
+                  priceSompi: BigInt(tt.priceSompi),
+                  supply: tt.supply,
+                  metadataUri: tt.metadataUri,
+                  perk: tt.perk ?? undefined,
+                  sortOrder: tt.sortOrder ?? i,
+                })),
+              }
+            : undefined,
         },
+        include: { ticketTypes: { orderBy: { sortOrder: 'asc' } } },
       })
 
       reply.status(201)
-      return formatSale(sale)
+      return formatSaleWithTypes(sale)
     }
   )
 
@@ -86,7 +110,10 @@ export async function salesRoutes(fastify: FastifyInstance) {
 
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { event: true },
+      include: {
+        event: true,
+        ticketTypes: { orderBy: { sortOrder: 'asc' } },
+      },
     })
 
     if (!sale) {
@@ -95,10 +122,147 @@ export async function salesRoutes(fastify: FastifyInstance) {
     }
 
     return {
-      ...formatSale(sale),
+      ...formatSaleWithTypes(sale),
       eventTitle: sale.event.title,
     }
   })
+
+  // Get ticket types for a sale
+  fastify.get<{ Params: { saleId: string } }>(
+    '/v1/sales/:saleId/ticket-types',
+    async (request, reply) => {
+      const { saleId } = request.params
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      const ticketTypes = await prisma.ticketType.findMany({
+        where: { saleId },
+        orderBy: { sortOrder: 'asc' },
+      })
+
+      // Get minted counts per type
+      const mintedCounts = await prisma.ticket.groupBy({
+        by: ['ticketTypeId'],
+        where: { saleId, status: { not: 'cancelled' } },
+        _count: true,
+      })
+      const mintedMap = new Map(mintedCounts.map((m) => [m.ticketTypeId, m._count]))
+
+      return {
+        saleId,
+        ticketTypes: ticketTypes.map((tt) => ({
+          ...formatTicketType(tt),
+          minted: mintedMap.get(tt.id) ?? 0,
+          remaining: tt.supply - (mintedMap.get(tt.id) ?? 0),
+        })),
+      }
+    }
+  )
+
+  // Create a ticket type for a sale
+  fastify.post<{ Params: { saleId: string } }>(
+    '/v1/sales/:saleId/ticket-types',
+    async (request, reply) => {
+      const { saleId } = request.params
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      if (sale.status !== 'scheduled') {
+        reply.status(400)
+        return { error: 'Cannot add ticket types after sale is published' }
+      }
+
+      const parseResult = ticketTypeSchema.safeParse(request.body)
+      if (!parseResult.success) {
+        reply.status(400)
+        return { error: 'Validation failed', details: parseResult.error.flatten() }
+      }
+
+      const data = parseResult.data
+
+      // Check for duplicate code
+      const existing = await prisma.ticketType.findUnique({
+        where: { saleId_code: { saleId, code: data.code } },
+      })
+      if (existing) {
+        reply.status(409)
+        return { error: `Ticket type code '${data.code}' already exists for this sale` }
+      }
+
+      const ticketType = await prisma.ticketType.create({
+        data: {
+          saleId,
+          code: data.code,
+          name: data.name,
+          priceSompi: BigInt(data.priceSompi),
+          supply: data.supply,
+          metadataUri: data.metadataUri,
+          perk: data.perk ?? undefined,
+          sortOrder: data.sortOrder ?? 0,
+        },
+      })
+
+      reply.status(201)
+      return formatTicketType(ticketType)
+    }
+  )
+
+  // Update a ticket type
+  fastify.patch<{ Params: { saleId: string; ticketTypeId: string } }>(
+    '/v1/sales/:saleId/ticket-types/:ticketTypeId',
+    async (request, reply) => {
+      const { saleId, ticketTypeId } = request.params
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      if (!sale) {
+        reply.status(404)
+        return { error: 'Sale not found' }
+      }
+
+      if (sale.status !== 'scheduled') {
+        reply.status(400)
+        return { error: 'Cannot modify ticket types after sale is published' }
+      }
+
+      const tt = await prisma.ticketType.findFirst({
+        where: { id: ticketTypeId, saleId },
+      })
+      if (!tt) {
+        reply.status(404)
+        return { error: 'Ticket type not found' }
+      }
+
+      const parseResult = updateTicketTypeSchema.safeParse(request.body)
+      if (!parseResult.success) {
+        reply.status(400)
+        return { error: 'Validation failed', details: parseResult.error.flatten() }
+      }
+
+      const data = parseResult.data
+
+      const updated = await prisma.ticketType.update({
+        where: { id: ticketTypeId },
+        data: {
+          ...(data.name !== undefined && { name: data.name }),
+          ...(data.priceSompi !== undefined && { priceSompi: BigInt(data.priceSompi) }),
+          ...(data.supply !== undefined && { supply: data.supply }),
+          ...(data.metadataUri !== undefined && { metadataUri: data.metadataUri }),
+          ...(data.perk !== undefined && { perk: data.perk }),
+          ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
+        },
+      })
+
+      return formatTicketType(updated)
+    }
+  )
 
   // Publish sale (scheduled -> live)
   fastify.post<{ Params: { saleId: string } }>(
@@ -174,12 +338,15 @@ export async function salesRoutes(fastify: FastifyInstance) {
       where: eventId ? { eventId } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 100,
-      include: { event: { select: { title: true } } },
+      include: {
+        event: { select: { title: true } },
+        ticketTypes: { orderBy: { sortOrder: 'asc' } },
+      },
     })
 
     return {
       sales: sales.map((s) => ({
-        ...formatSale(s),
+        ...formatSaleWithTypes(s),
         eventTitle: s.event.title,
       })),
     }
@@ -509,7 +676,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
   )
 }
 
-function formatSale(sale: {
+interface SaleRecord {
   id: string
   eventId: string
   network: string
@@ -525,8 +692,24 @@ function formatSale(sale: {
   status: string
   merkleRoot: string | null
   commitTxid: string | null
+  claimContractAddress: string | null
   createdAt: Date
-}) {
+}
+
+interface TicketTypeRecord {
+  id: string
+  saleId: string
+  code: string
+  name: string
+  priceSompi: bigint
+  supply: number
+  metadataUri: string | null
+  perk: unknown
+  sortOrder: number
+  createdAt: Date
+}
+
+function formatSale(sale: SaleRecord) {
   return {
     id: sale.id,
     eventId: sale.eventId,
@@ -543,6 +726,29 @@ function formatSale(sale: {
     status: sale.status,
     merkleRoot: sale.merkleRoot,
     commitTxid: sale.commitTxid,
+    claimContractAddress: sale.claimContractAddress,
     createdAt: sale.createdAt.toISOString(),
+  }
+}
+
+function formatSaleWithTypes(sale: SaleRecord & { ticketTypes: TicketTypeRecord[] }) {
+  return {
+    ...formatSale(sale),
+    ticketTypes: sale.ticketTypes.map(formatTicketType),
+  }
+}
+
+function formatTicketType(tt: TicketTypeRecord) {
+  return {
+    id: tt.id,
+    saleId: tt.saleId,
+    code: tt.code,
+    name: tt.name,
+    priceSompi: tt.priceSompi.toString(),
+    supply: tt.supply,
+    metadataUri: tt.metadataUri,
+    perk: tt.perk,
+    sortOrder: tt.sortOrder,
+    createdAt: tt.createdAt.toISOString(),
   }
 }

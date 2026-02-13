@@ -526,7 +526,7 @@
 - 기존 단일 타입 sale도 깨지지 않음(기본 타입 자동 처리 또는 nullable 대응)
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1015,3 +1015,12 @@
   - Events: SaleCreated, TicketTypeDefined, ClaimOpened, TicketClaimed, SaleFinalized
   - Merkle leaf: keccak256(claimer, ticketTypeCode, kaspaTxid, finalRank)
   - docs/contract-spec.md 전면 개정, .env.example 업데이트
+
+- **GP-020** (2026-02-14): DB 스키마 멀티 티켓 타입 모델링 완료
+  - TicketType 모델 추가 (saleId, code, name, priceSompi, supply, metadataUri, perk, sortOrder)
+  - PurchaseAttempt에 requestedTicketTypeId FK 추가 (nullable)
+  - Ticket에 ticketTypeId FK, claimTxid, tokenId 추가
+  - Sale에 claimContractAddress 추가
+  - @@unique([saleId, code]) 제약조건
+  - Seed: VIP (5 KAS, 10장), R (2 KAS, 40장), GEN (1 KAS, 50장)
+  - Migration 적용 + 71 shared tests, 33 indexer tests 통과

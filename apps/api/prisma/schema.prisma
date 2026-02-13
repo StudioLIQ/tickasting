@@ -1,4 +1,4 @@
-// GhostPass Prisma Schema
+// Tickasting Prisma Schema
 // Reference: PROJECT.md Section 13
 
 generator client {
@@ -72,51 +72,77 @@ model Event {
 }
 
 model Sale {
-  id               String     @id @default(uuid())
-  eventId          String     @map("event_id")
-  network          String     @default("testnet") // mainnet | testnet
-  treasuryAddress  String     @map("treasury_address")
-  ticketPriceSompi BigInt     @map("ticket_price_sompi")
-  supplyTotal      Int        @map("supply_total")
-  maxPerAddress    Int?       @map("max_per_address")
-  powDifficulty    Int        @default(18) @map("pow_difficulty")
-  finalityDepth    Int        @default(30) @map("finality_depth")
-  fallbackEnabled  Boolean    @default(false) @map("fallback_enabled")
-  startAt          DateTime?  @map("start_at")
-  endAt            DateTime?  @map("end_at")
-  status           SaleStatus @default(scheduled)
-  merkleRoot       String?    @map("merkle_root")
-  commitTxid       String?    @map("commit_txid")
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
+  id                   String     @id @default(uuid())
+  eventId              String     @map("event_id")
+  network              String     @default("testnet") // mainnet | testnet
+  treasuryAddress      String     @map("treasury_address")
+  ticketPriceSompi     BigInt     @map("ticket_price_sompi")
+  supplyTotal          Int        @map("supply_total")
+  maxPerAddress        Int?       @map("max_per_address")
+  powDifficulty        Int        @default(18) @map("pow_difficulty")
+  finalityDepth        Int        @default(30) @map("finality_depth")
+  fallbackEnabled      Boolean    @default(false) @map("fallback_enabled")
+  startAt              DateTime?  @map("start_at")
+  endAt                DateTime?  @map("end_at")
+  status               SaleStatus @default(scheduled)
+  merkleRoot           String?    @map("merkle_root")
+  commitTxid           String?    @map("commit_txid")
+  claimContractAddress String?    @map("claim_contract_address")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
   event            Event              @relation(fields: [eventId], references: [id])
   purchaseAttempts PurchaseAttempt[]
   tickets          Ticket[]
+  ticketTypes      TicketType[]
 
   @@map("sales")
 }
 
-model PurchaseAttempt {
-  id                   String           @id @default(uuid())
-  saleId               String           @map("sale_id")
-  txid                 String           @unique
-  detectedAt           DateTime         @default(now()) @map("detected_at")
-  validationStatus     ValidationStatus @default(pending) @map("validation_status")
-  invalidReason        String?          @map("invalid_reason")
-  payloadHex           String?          @map("payload_hex")
-  buyerAddrHash        String?          @map("buyer_addr_hash")
-  accepted             Boolean          @default(false)
-  acceptingBlockHash   String?          @map("accepting_block_hash")
-  acceptingBlueScore   BigInt?          @map("accepting_blue_score")
-  confirmations        Int              @default(0)
-  provisionalRank      Int?             @map("provisional_rank")
-  finalRank            Int?             @map("final_rank")
-  lastCheckedAt        DateTime?        @map("last_checked_at")
-  createdAt            DateTime         @default(now()) @map("created_at")
-  updatedAt            DateTime         @updatedAt @map("updated_at")
+model TicketType {
+  id          String   @id @default(uuid())
+  saleId      String   @map("sale_id")
+  code        String   // e.g. VIP, R, GEN — unique within sale
+  name        String
+  priceSompi  BigInt   @map("price_sompi")
+  supply      Int
+  metadataUri String?  @map("metadata_uri")
+  perk        Json?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  sale Sale @relation(fields: [saleId], references: [id])
+  sale              Sale              @relation(fields: [saleId], references: [id])
+  tickets           Ticket[]
+  purchaseAttempts  PurchaseAttempt[]
+
+  @@unique([saleId, code])
+  @@index([saleId])
+  @@map("ticket_types")
+}
+
+model PurchaseAttempt {
+  id                     String           @id @default(uuid())
+  saleId                 String           @map("sale_id")
+  requestedTicketTypeId  String?          @map("requested_ticket_type_id")
+  txid                   String           @unique
+  detectedAt             DateTime         @default(now()) @map("detected_at")
+  validationStatus       ValidationStatus @default(pending) @map("validation_status")
+  invalidReason          String?          @map("invalid_reason")
+  payloadHex             String?          @map("payload_hex")
+  buyerAddrHash          String?          @map("buyer_addr_hash")
+  accepted               Boolean          @default(false)
+  acceptingBlockHash     String?          @map("accepting_block_hash")
+  acceptingBlueScore     BigInt?          @map("accepting_blue_score")
+  confirmations          Int              @default(0)
+  provisionalRank        Int?             @map("provisional_rank")
+  finalRank              Int?             @map("final_rank")
+  lastCheckedAt          DateTime?        @map("last_checked_at")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  sale              Sale        @relation(fields: [saleId], references: [id])
+  requestedTicketType TicketType? @relation(fields: [requestedTicketTypeId], references: [id])
 
   @@index([saleId])
   @@index([saleId, accepted])
@@ -127,9 +153,12 @@ model PurchaseAttempt {
 model Ticket {
   id            String       @id @default(uuid())
   saleId        String       @map("sale_id")
+  ticketTypeId  String?      @map("ticket_type_id")
   ownerAddress  String       @map("owner_address")
   ownerAddrHash String       @map("owner_addr_hash")
   originTxid    String       @map("origin_txid")
+  claimTxid     String?      @map("claim_txid")
+  tokenId       String?      @map("token_id")
   status        TicketStatus @default(issued)
   qrSignature   String?      @map("qr_signature")
   issuedAt      DateTime     @default(now()) @map("issued_at")
@@ -137,8 +166,9 @@ model Ticket {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  sale  Sale   @relation(fields: [saleId], references: [id])
-  scans Scan[]
+  sale       Sale        @relation(fields: [saleId], references: [id])
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
+  scans      Scan[]
 
   @@index([saleId])
   @@index([originTxid])

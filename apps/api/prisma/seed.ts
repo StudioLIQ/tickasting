@@ -12,7 +12,7 @@ async function main() {
     create: {
       id: 'demo-event-001',
       organizerId: 'demo-organizer',
-      title: 'GhostPass Demo Concert',
+      title: 'Tickasting Demo Concert',
       venue: 'Kaspa Arena',
       startAt: new Date('2025-03-01T19:00:00Z'),
       endAt: new Date('2025-03-01T23:00:00Z'),
@@ -46,6 +46,52 @@ async function main() {
   console.log(`  - Price: ${sale.ticketPriceSompi} sompi`)
   console.log(`  - Supply: ${sale.supplyTotal}`)
   console.log(`  - PoW Difficulty: ${sale.powDifficulty}`)
+
+  // Create ticket types (VIP / Reserved / General)
+  const ticketTypes = [
+    {
+      id: 'demo-type-vip',
+      saleId: sale.id,
+      code: 'VIP',
+      name: 'VIP Standing',
+      priceSompi: BigInt(500_000_000), // 5 KAS
+      supply: 10,
+      metadataUri: 'ipfs://demo/vip',
+      perk: { backstageAccess: true, merchandiseIncluded: true },
+      sortOrder: 0,
+    },
+    {
+      id: 'demo-type-r',
+      saleId: sale.id,
+      code: 'R',
+      name: 'Reserved Seat',
+      priceSompi: BigInt(200_000_000), // 2 KAS
+      supply: 40,
+      metadataUri: 'ipfs://demo/reserved',
+      perk: { seatSection: 'A-D' },
+      sortOrder: 1,
+    },
+    {
+      id: 'demo-type-gen',
+      saleId: sale.id,
+      code: 'GEN',
+      name: 'General Admission',
+      priceSompi: BigInt(100_000_000), // 1 KAS
+      supply: 50,
+      metadataUri: 'ipfs://demo/general',
+      perk: null,
+      sortOrder: 2,
+    },
+  ]
+
+  for (const tt of ticketTypes) {
+    await prisma.ticketType.upsert({
+      where: { id: tt.id },
+      update: {},
+      create: tt,
+    })
+    console.log(`  - Ticket type: ${tt.code} (${tt.name}) — supply: ${tt.supply}, price: ${tt.priceSompi} sompi`)
+  }
 
   console.log('Seeding complete!')
 }

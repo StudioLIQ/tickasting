@@ -847,7 +847,7 @@
 - 운영자가 문서만 보고 재동기화를 수행 가능
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1123,6 +1123,14 @@
   - 컷오버 체크리스트: pre/cutover/post/rollback 단계별 정리
   - 이중 기록/검증: USE_PONDER_DATA flag + ?source= 쿼리 + consistency 엔드포인트
   - Kaspa tx scanning은 Ponder 범위 밖 (non-EVM) — legacy 유지 확인
+
+- **GP-034** (2026-02-14): 관측성/운영 문서 완료
+  - docs/ponder-monitoring.md 신규 작성
+  - 핵심 메트릭 정의: last indexed block, chain head gap, processing lag, handler errors
+  - Ponder 내장 엔드포인트: /health, /ready, /status, /metrics
+  - 알람 룰: Railway 헬스체크 + 외부 모니터링 예시
+  - 장애 대응 runbook: 5개 시나리오 (crash, stuck, handler error, schema mismatch, full resync)
+  - 로그 필드 표준화: level, chain, contract, event, blockNumber
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

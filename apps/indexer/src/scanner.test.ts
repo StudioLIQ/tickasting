@@ -28,6 +28,7 @@ function mockSale(overrides: Partial<Sale> = {}): Sale {
     status: 'live',
     merkleRoot: null,
     commitTxid: null,
+    claimContractAddress: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

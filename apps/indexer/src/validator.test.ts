@@ -28,6 +28,7 @@ const testSale: Sale = {
   status: 'live',
   merkleRoot: null,
   commitTxid: null,
+  claimContractAddress: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 }
@@ -110,6 +111,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: testSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',
@@ -165,6 +167,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: testSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',
@@ -217,6 +220,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: otherSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',
@@ -269,6 +273,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: testSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',
@@ -308,6 +313,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: testSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',
@@ -376,6 +382,7 @@ describe('PurchaseValidator', () => {
     const attempt: PurchaseAttempt & { sale: Sale } = {
       id: 'attempt-001',
       saleId: testSale.id,
+      requestedTicketTypeId: null,
       txid: 'tx-001',
       detectedAt: new Date(),
       validationStatus: 'pending',

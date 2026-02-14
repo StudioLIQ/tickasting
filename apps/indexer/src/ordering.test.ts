@@ -26,6 +26,7 @@ const testSale: Sale = {
   status: 'live',
   merkleRoot: null,
   commitTxid: null,
+  claimContractAddress: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 }
@@ -41,6 +42,7 @@ function mockAttempt(
   return {
     id,
     saleId: testSale.id,
+    requestedTicketTypeId: null,
     txid,
     detectedAt: new Date(),
     validationStatus: 'valid',

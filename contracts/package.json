@@ -1,0 +1,25 @@
+{
+  "name": "@tickasting/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "deploy:localhost": "hardhat run scripts/deploy.ts --network localhost",
+    "verify": "hardhat verify --network sepolia",
+    "export-abi": "tsx scripts/export-abi.ts",
+    "typecheck": "hardhat compile && tsc --noEmit",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "ethers": "^6.13.0",
+    "hardhat": "^2.22.0",
+    "merkletreejs": "^0.6.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.2"
+  }
+}

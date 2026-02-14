@@ -573,7 +573,7 @@
 - ABI 버전이 앱 코드와 동기화됨
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1033,3 +1033,12 @@
   - 검증: 중복 code 409, 비공개 sale만 수정 가능, priceSompi/supply 양수
   - GET /v1/sales/:saleId 응답에 ticketTypes 포함
   - Zod 스키마: ticketTypeSchema, updateTicketTypeSchema 추가
+
+- **GP-022** (2026-02-14): Contracts 패키지 스캐폴딩 + 배포 파이프라인 완료
+  - contracts/ 워크스페이스: Hardhat + Solidity 0.8.24
+  - TickastingSale.sol: ERC-721 + Merkle proof claim 컨트랙트
+  - OpenZeppelin: ERC721Enumerable, Ownable, ReentrancyGuard, MerkleProof
+  - 13개 contract tests 통과 (createSale, defineTicketType, claimTicket, finalizeSale)
+  - deploy script (localhost/sepolia), export-abi script
+  - ABI exported to packages/shared/abi/TickastingSale.json (64 entries)
+  - pnpm-workspace에 contracts 등록

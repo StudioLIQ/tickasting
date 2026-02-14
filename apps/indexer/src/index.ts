@@ -1,10 +1,19 @@
+/**
+ * @deprecated This indexer is deprecated. EVM contract event indexing has moved to
+ * apps/ponder (Ponder framework). This legacy indexer remains only for Kaspa tx
+ * scanning (treasury address polling, validation, acceptance tracking, ordering)
+ * until Kaspa support is added to Ponder or an alternative is implemented.
+ *
+ * See: docs/architecture.md, docs/migration-ponder.md
+ */
+
 import Fastify from 'fastify'
 import { prisma } from './db.js'
 import { createScannerLoop } from './scanner.js'
 import { PurchaseValidator } from './validator.js'
 import { createAcceptanceTrackerLoop } from './acceptance-tracker.js'
 import { createOrderingLoop } from './ordering.js'
-import { KasFyiAdapter } from '@ghostpass/shared'
+import { KasFyiAdapter } from '@tickasting/shared'
 
 const PORT = parseInt(process.env['INDEXER_PORT'] || '4002', 10)
 const POLL_INTERVAL_MS = parseInt(process.env['INDEXER_POLL_INTERVAL_MS'] || '5000', 10)

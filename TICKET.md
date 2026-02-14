@@ -867,7 +867,7 @@
 - 문서/스크립트/CI가 Ponder 기준으로 일관됨
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1131,6 +1131,12 @@
   - 알람 룰: Railway 헬스체크 + 외부 모니터링 예시
   - 장애 대응 runbook: 5개 시나리오 (crash, stuck, handler error, schema mismatch, full resync)
   - 로그 필드 표준화: level, chain, contract, event, blockNumber
+
+- **GP-035** (2026-02-14): Legacy Indexer 코드 정리 완료
+  - apps/indexer/src/index.ts에 @deprecated JSDoc 마킹
+  - README.md에 Ponder 우선 반영 (Tech Stack, 서비스 목록)
+  - apps/indexer는 Kaspa tx scanning 용도로 유지 (non-EVM이라 Ponder 이관 불가)
+  - 문서/CI가 Ponder 기준으로 일관됨 확인
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

@@ -76,7 +76,8 @@ pnpm dev
 This starts:
 - **Web**: http://localhost:3000
 - **API**: http://localhost:4001
-- **Indexer**: http://localhost:4002
+- **Ponder**: http://localhost:42069 (EVM indexer, if configured)
+- **Indexer** (legacy): http://localhost:4002 (Kaspa tx scanning)
 
 ### Health Checks
 
@@ -247,6 +248,8 @@ pnpm --filter @tickasting/indexer test
 - **Monorepo**: pnpm + Turborepo
 - **Web**: Next.js 15, React 19, Tailwind CSS
 - **API**: Fastify 5, Zod, @fastify/websocket
+- **Indexing**: Ponder 0.16 (EVM contract events)
+- **Contracts**: Solidity, Hardhat, OpenZeppelin (Sepolia ERC-721)
 - **Database**: PostgreSQL + Prisma
 - **Shared**: TypeScript, Vitest
 

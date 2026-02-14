@@ -824,7 +824,7 @@
 - 데이터 유실/중복 없이 전환 완료
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1116,6 +1116,13 @@
   - DEPLOY.md에 Ponder 장애 대응 가이드 추가 (7.4~7.6)
   - 데모 체크리스트에 Ponder 상태 확인 항목 추가
   - 업데이트 배포 루틴에 Ponder 재인덱싱 반영
+
+- **GP-033** (2026-02-14): 데이터 마이그레이션 전략 + 컷오버 문서 완료
+  - docs/migration-ponder.md 신규 작성
+  - 마이그레이션 전략: EVM 데이터는 full reindex, Kaspa tx는 legacy 유지
+  - 컷오버 체크리스트: pre/cutover/post/rollback 단계별 정리
+  - 이중 기록/검증: USE_PONDER_DATA flag + ?source= 쿼리 + consistency 엔드포인트
+  - Kaspa tx scanning은 Ponder 범위 밖 (non-EVM) — legacy 유지 확인
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

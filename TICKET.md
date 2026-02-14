@@ -660,7 +660,7 @@
 - 배포 체크리스트로 claim까지 검증 가능
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1061,3 +1061,10 @@
   - Winner claim 섹션 (MetaMask 안내 + 컨트랙트 주소)
   - API client에 TicketType, ClaimStatus 인터페이스 추가
   - getTicketTypes(), getClaimStatus() API 함수 추가
+
+- **GP-026** (2026-02-14): 배포/운영 문서 업데이트 완료
+  - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
+  - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
+  - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가
+  - LOCAL.md에 Hardhat 로컬 테스트 절차 + Sepolia dry-run 절차 추가
+  - LOCAL.md에 ABI 동기화 절차 추가

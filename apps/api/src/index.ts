@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import websocket from '@fastify/websocket'
 import { prisma } from './db.js'
+import { USE_PONDER_DATA, ponderTablesExist } from './ponder-client.js'
 import { eventsRoutes } from './routes/events.js'
 import { salesRoutes } from './routes/sales.js'
 import { websocketRoutes } from './routes/websocket.js'
@@ -25,7 +26,7 @@ async function main() {
   await fastify.register(cors, { origin: true })
   await fastify.register(websocket)
 
-  // Health check endpoint with DB status
+  // Health check endpoint with DB + Ponder status
   fastify.get('/health', async () => {
     let dbStatus = 'ok'
     try {
@@ -34,11 +35,18 @@ async function main() {
       dbStatus = 'error'
     }
 
+    let ponderStatus = 'disabled'
+    if (USE_PONDER_DATA) {
+      ponderStatus = (await ponderTablesExist()) ? 'ok' : 'tables_missing'
+    }
+
     return {
       status: dbStatus === 'ok' ? 'ok' : 'degraded',
       service: 'api',
       timestamp: new Date().toISOString(),
       db: dbStatus,
+      ponder: ponderStatus,
+      usePonderData: USE_PONDER_DATA,
     }
   })
 

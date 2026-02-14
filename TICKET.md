@@ -739,7 +739,7 @@
 - 동일 블록 재처리/재기동 시 중복 데이터가 쌓이지 않음
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14) — Implemented as part of GP-028
 
 ---
 
@@ -760,7 +760,7 @@
 - `apps/indexer` 미기동 상태에서도 주요 흐름 동작
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1087,6 +1087,20 @@
   - ponder-env.d.ts, tsconfig.json, .env.example
   - pnpm-workspace에 자동 편입 (apps/* 패턴)
   - DEPLOY.md에 Ponder 서비스 명령어/환경변수 확정
+  - typecheck 통과
+
+- **GP-029** (2026-02-14): GP-028에서 함께 완료
+  - 5개 TickastingSale 이벤트 + Transfer 핸들러 구현 (src/index.ts)
+  - onchainTable 스키마: sales_onchain, ticket_types_onchain, claims_onchain, token_ownership
+  - Ponder 프레임워크 내장 reorg-safe idempotency + checkpoint/replay
+
+- **GP-030** (2026-02-14): BE(API) 리팩터 — Ponder 테이블 기반 조회/상태 동기화
+  - ponder-client.ts 신규: Ponder 테이블 쿼리 유틸 (getPonderClaims, getPonderSale, ponderTablesExist)
+  - USE_PONDER_DATA 환경변수 기반 데이터 소스 전환 (feature flag)
+  - GET /v1/sales/:saleId/claims: ?source=ponder|legacy 쿼리 파라미터 지원
+  - GET /v1/sales/:saleId/claims/consistency: Ponder 데이터 우선 사용 + claimSource 표시
+  - /health 엔드포인트: ponder 상태 + usePonderData 필드 추가
+  - Ponder 테이블 미존재 시 legacy 자동 fallback
   - typecheck 통과
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가

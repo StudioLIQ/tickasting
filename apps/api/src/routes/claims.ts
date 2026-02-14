@@ -3,14 +3,27 @@
  *
  * Handles synchronization between off-chain winner determination
  * and on-chain claim/mint on EVM (Sepolia).
+ *
+ * Data sources:
+ * - Legacy (Prisma): Manual sync via POST /claims/sync
+ * - Ponder (target): Auto-indexed from contract events, read via raw SQL
+ *
+ * Set USE_PONDER_DATA=true to read on-chain claim data from Ponder tables.
  */
 
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
+import {
+  USE_PONDER_DATA,
+  ponderTablesExist,
+  getPonderClaims,
+  formatPonderClaim,
+} from '../ponder-client.js'
 
 export async function claimRoutes(fastify: FastifyInstance) {
   // Register an on-chain claim (called by backend after detecting TicketClaimed event)
+  // NOTE: With Ponder active, this endpoint is optional — Ponder indexes claims automatically.
   const registerClaimSchema = z.object({
     kaspaTxid: z.string().min(1),
     ticketTypeCode: z.string().min(1),
@@ -104,10 +117,13 @@ export async function claimRoutes(fastify: FastifyInstance) {
   )
 
   // Get claim status for a sale
-  fastify.get<{ Params: { saleId: string } }>(
+  // When USE_PONDER_DATA=true, reads from Ponder's claims_onchain table.
+  // Otherwise falls back to legacy Prisma ticket records.
+  fastify.get<{ Params: { saleId: string }; Querystring: { source?: string } }>(
     '/v1/sales/:saleId/claims',
     async (request, reply) => {
       const { saleId } = request.params
+      const requestedSource = request.query.source // 'ponder' | 'legacy' | undefined
 
       const sale = await prisma.sale.findUnique({ where: { id: saleId } })
       if (!sale) {
@@ -115,35 +131,61 @@ export async function claimRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      const tickets = await prisma.ticket.findMany({
-        where: { saleId },
-        include: { ticketType: true },
-        orderBy: { issuedAt: 'asc' },
-      })
+      // Determine data source
+      const usePonder = requestedSource === 'ponder' ||
+        (requestedSource !== 'legacy' && USE_PONDER_DATA)
 
-      const claimed = tickets.filter((t) => t.claimTxid !== null)
-      const unclaimed = tickets.filter((t) => t.claimTxid === null)
+      if (usePonder) {
+        const hasTables = await ponderTablesExist()
+        if (!hasTables) {
+          // Fall back to legacy if Ponder tables don't exist yet
+          return getLegacyClaims(saleId)
+        }
 
-      return {
-        saleId,
-        totalTickets: tickets.length,
-        claimed: claimed.length,
-        unclaimed: unclaimed.length,
-        tickets: tickets.map((t) => ({
-          id: t.id,
-          originTxid: t.originTxid,
-          ticketTypeCode: t.ticketType?.code ?? null,
-          ownerAddress: t.ownerAddress,
-          claimTxid: t.claimTxid,
-          tokenId: t.tokenId,
-          status: t.status,
-          issuedAt: t.issuedAt.toISOString(),
-        })),
+        const ponderClaims = await getPonderClaims(saleId)
+        return {
+          saleId,
+          source: 'ponder',
+          totalClaimed: ponderClaims.length,
+          claims: ponderClaims.map(formatPonderClaim),
+        }
       }
+
+      return getLegacyClaims(saleId)
     }
   )
 
+  async function getLegacyClaims(saleId: string) {
+    const tickets = await prisma.ticket.findMany({
+      where: { saleId },
+      include: { ticketType: true },
+      orderBy: { issuedAt: 'asc' },
+    })
+
+    const claimed = tickets.filter((t) => t.claimTxid !== null)
+    const unclaimed = tickets.filter((t) => t.claimTxid === null)
+
+    return {
+      saleId,
+      source: 'legacy',
+      totalTickets: tickets.length,
+      claimed: claimed.length,
+      unclaimed: unclaimed.length,
+      tickets: tickets.map((t) => ({
+        id: t.id,
+        originTxid: t.originTxid,
+        ticketTypeCode: t.ticketType?.code ?? null,
+        ownerAddress: t.ownerAddress,
+        claimTxid: t.claimTxid,
+        tokenId: t.tokenId,
+        status: t.status,
+        issuedAt: t.issuedAt.toISOString(),
+      })),
+    }
+  }
+
   // Consistency check: compare off-chain winners vs on-chain claims
+  // Uses Ponder data when available for on-chain claim source.
   fastify.get<{ Params: { saleId: string } }>(
     '/v1/sales/:saleId/claims/consistency',
     async (request, reply) => {
@@ -166,34 +208,46 @@ export async function claimRoutes(fastify: FastifyInstance) {
         orderBy: { finalRank: 'asc' },
       })
 
-      // Get on-chain claimed tickets
-      const claimedTickets = await prisma.ticket.findMany({
-        where: { saleId, claimTxid: { not: null } },
-      })
-      const claimedTxids = new Set(claimedTickets.map((t) => t.originTxid))
+      // Get on-chain claimed data — prefer Ponder if available
+      let claimSource = 'legacy'
+      let claimedTxids: Set<string>
+      let totalClaimed: number
+
+      const hasPonderTables = await ponderTablesExist()
+      if (hasPonderTables) {
+        const ponderClaims = await getPonderClaims(saleId)
+        claimedTxids = new Set(ponderClaims.map((c) => c.kaspa_txid))
+        totalClaimed = ponderClaims.length
+        claimSource = 'ponder'
+      } else {
+        const claimedTickets = await prisma.ticket.findMany({
+          where: { saleId, claimTxid: { not: null } },
+        })
+        claimedTxids = new Set(claimedTickets.map((t) => t.originTxid))
+        totalClaimed = claimedTickets.length
+      }
 
       // Find mismatches
       const unclaimedWinners = winners.filter((w) => !claimedTxids.has(w.txid))
-      const unknownClaims = claimedTickets.filter(
-        (t) => !winners.some((w) => w.txid === t.originTxid)
+      const claimedNonWinnerTxids = [...claimedTxids].filter(
+        (txid) => !winners.some((w) => w.txid === txid)
       )
 
-      const consistent = unclaimedWinners.length === 0 && unknownClaims.length === 0
+      const consistent = unclaimedWinners.length === 0 && claimedNonWinnerTxids.length === 0
 
       return {
         saleId,
+        claimSource,
         consistent,
         totalWinners: winners.length,
-        totalClaimed: claimedTickets.length,
+        totalClaimed,
         unclaimedWinners: unclaimedWinners.map((w) => ({
           txid: w.txid,
           finalRank: w.finalRank,
           buyerAddrHash: w.buyerAddrHash,
         })),
-        unknownClaims: unknownClaims.map((t) => ({
-          ticketId: t.id,
-          originTxid: t.originTxid,
-          claimTxid: t.claimTxid,
+        unknownClaims: claimedNonWinnerTxids.map((txid) => ({
+          kaspaTxid: txid,
         })),
       }
     }

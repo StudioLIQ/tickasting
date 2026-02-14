@@ -6,7 +6,7 @@
  */
 
 import type { PrismaClient, Sale, PurchaseAttempt } from '@prisma/client'
-import type { KaspaAdapter, TransactionAcceptance } from '@ghostpass/shared'
+import type { KaspaAdapter, TransactionAcceptance } from '@tickasting/shared'
 
 export interface AcceptanceTrackerConfig {
   /** Max number of txids to batch in a single API call */

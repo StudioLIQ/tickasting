@@ -1,8 +1,8 @@
 /**
- * GhostPass Payload v1 Encoder/Decoder
+ * Tickasting Payload v1 Encoder/Decoder
  *
  * Payload binary format (hex string):
- * - magic(4): "GPS1"
+ * - magic(4): "TKS1"
  * - version(1): 0x01
  * - saleId(16): UUIDv4 bytes
  * - buyerAddrHash(20): first 20 bytes of sha256(address)
@@ -14,7 +14,7 @@
  * Total: 4 + 1 + 16 + 20 + 8 + 1 + 1 + 8 = 59 bytes
  */
 
-export const MAGIC = 'GPS1'
+export const MAGIC = 'TKS1'
 export const PAYLOAD_VERSION = 0x01
 export const POW_ALGO_SHA256 = 0x01
 export const PAYLOAD_LENGTH = 59

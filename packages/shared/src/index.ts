@@ -1,6 +1,6 @@
 /**
- * @ghostpass/shared
- * Shared utilities for GhostPass
+ * @tickasting/shared
+ * Shared utilities for Tickasting
  */
 
 // Payload encoding/decoding

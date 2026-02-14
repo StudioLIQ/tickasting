@@ -1,5 +1,5 @@
 {
-  "name": "ghostpass",
+  "name": "tickasting",
   "version": "0.0.1",
   "private": true,
   "packageManager": "pnpm@9.15.0",
@@ -11,11 +11,11 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "db:generate": "pnpm --filter @ghostpass/api db:generate",
-    "db:migrate": "pnpm --filter @ghostpass/api db:migrate",
-    "db:push": "pnpm --filter @ghostpass/api db:push",
-    "db:seed": "pnpm --filter @ghostpass/api db:seed",
-    "db:studio": "pnpm --filter @ghostpass/api db:studio"
+    "db:generate": "pnpm --filter @tickasting/api db:generate",
+    "db:migrate": "pnpm --filter @tickasting/api db:migrate",
+    "db:push": "pnpm --filter @tickasting/api db:push",
+    "db:seed": "pnpm --filter @tickasting/api db:seed",
+    "db:studio": "pnpm --filter @tickasting/api db:studio"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

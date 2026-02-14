@@ -20,7 +20,7 @@ describe('PoW', () => {
     it('should build correct message format', () => {
       const message = buildPowMessage(sampleInput.saleId, sampleInput.buyerAddrHash, 12345n)
       expect(message).toBe(
-        'GhostPassPoW|v1|550e8400-e29b-41d4-a716-446655440000|0123456789abcdef0123456789abcdef01234567|12345'
+        'TickastingPoW|v1|550e8400-e29b-41d4-a716-446655440000|0123456789abcdef0123456789abcdef01234567|12345'
       )
     })
   })

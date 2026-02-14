@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ghostpass-postgres
+    container_name: tickasting-postgres
     environment:
-      POSTGRES_USER: ghostpass
-      POSTGRES_PASSWORD: ghostpass
-      POSTGRES_DB: ghostpass
+      POSTGRES_USER: tickasting
+      POSTGRES_PASSWORD: tickasting
+      POSTGRES_DB: tickasting
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ghostpass"]
+      test: ["CMD-SHELL", "pg_isready -U tickasting"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: ghostpass-redis
+    container_name: tickasting-redis
     ports:
       - "6379:6379"
     volumes:

@@ -1,5 +1,5 @@
 {
-  "name": "@ghostpass/indexer",
+  "name": "@tickasting/indexer",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "fastify": "^5.2.0",
-    "@ghostpass/shared": "workspace:*",
+    "@tickasting/shared": "workspace:*",
     "@prisma/client": "^5.22.0"
   },
   "devDependencies": {

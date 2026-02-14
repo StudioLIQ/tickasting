@@ -1,5 +1,5 @@
 /**
- * GhostPass Ordering Verification Script
+ * Tickasting Ordering Verification Script
  *
  * Verifies that ranking is deterministic:
  * 1. Fetches all attempts
@@ -22,7 +22,7 @@ interface VerifyConfig {
 async function verifyOrdering(config: VerifyConfig): Promise<boolean> {
   const { saleId, verbose } = config
 
-  console.log(`\n🔍 GhostPass Ordering Verification`)
+  console.log(`\n🔍 Tickasting Ordering Verification`)
   console.log(`   Sale: ${saleId}\n`)
 
   // Get sale

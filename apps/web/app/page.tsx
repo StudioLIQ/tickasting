@@ -1,9 +1,20 @@
+import Image from 'next/image'
+
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="text-center">
+        <div className="mb-6 flex justify-center">
+          <Image
+            src="/logo-mark.png"
+            alt="Tickasting logo mark"
+            width={120}
+            height={120}
+            priority
+          />
+        </div>
         <h1 className="text-5xl font-bold mb-4">
-          <span className="text-kaspa-primary">Ghost</span>Pass
+          <span className="text-kaspa-primary">Tickasting</span>
         </h1>
         <p className="text-xl text-gray-400 mb-8">
           Fair Ticketing Powered by Kaspa

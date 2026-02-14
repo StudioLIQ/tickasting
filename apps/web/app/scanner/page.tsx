@@ -181,7 +181,7 @@ export default function ScannerPage() {
             <textarea
               value={qrInput}
               onChange={(e) => setQrInput(e.target.value)}
-              placeholder="GP1|ticketId|saleId|txid|signature"
+              placeholder="TK1|ticketId|saleId|txid|signature"
               className="w-full bg-gray-700 border border-gray-600 rounded px-4 py-3 text-white placeholder-gray-500 font-mono text-sm"
               rows={3}
             />
@@ -245,7 +245,7 @@ export default function ScannerPage() {
                     type="text"
                     value={qrInput}
                     onChange={(e) => setQrInput(e.target.value)}
-                    placeholder="GP1|..."
+                    placeholder="TK1|..."
                     className="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white font-mono text-sm"
                   />
                   <div className="flex gap-4 mt-4">
@@ -280,7 +280,7 @@ export default function ScannerPage() {
             <li>• <strong>Verify Only:</strong> Check if ticket is valid without marking as used</li>
             <li>• <strong>Verify & Redeem:</strong> Check validity AND mark as used (one-time)</li>
             <li>• A ticket can only be redeemed ONCE</li>
-            <li>• QR format: <code className="bg-gray-700 px-1 rounded">GP1|ticketId|saleId|txid|signature</code></li>
+            <li>• QR format: <code className="bg-gray-700 px-1 rounded">TK1|ticketId|saleId|txid|signature</code></li>
           </ul>
         </div>
       </div>

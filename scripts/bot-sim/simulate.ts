@@ -1,5 +1,5 @@
 /**
- * GhostPass Bot Simulator
+ * Tickasting Bot Simulator
  *
  * Simulates N concurrent purchase attempts to verify:
  * 1. Ordering is deterministic (same input -> same rank)
@@ -35,7 +35,7 @@ function generateMockTxid(): string {
 
 function generateMockPayload(saleId: string, buyerIndex: number): string {
   // Simplified mock payload
-  const magic = '47505331' // GPS1 in hex
+  const magic = '544b5331' // TKS1 in hex
   const version = '01'
   const saleIdHex = saleId.replace(/-/g, '')
   const buyerHash = sha256(`buyer-${buyerIndex}`).slice(0, 40)
@@ -50,7 +50,7 @@ function generateMockBlockHash(blueScore: bigint): string {
 async function simulatePurchaseAttempts(config: SimConfig): Promise<void> {
   const { saleId, count, baseBlueScore, blueScoreVariance } = config
 
-  console.log(`\n🤖 GhostPass Bot Simulator`)
+  console.log(`\n🤖 Tickasting Bot Simulator`)
   console.log(`   Sale: ${saleId}`)
   console.log(`   Simulating ${count} purchase attempts...`)
   console.log(`   Blue score range: ${baseBlueScore} - ${baseBlueScore + BigInt(blueScoreVariance)}\n`)

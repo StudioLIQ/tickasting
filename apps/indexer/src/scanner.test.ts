@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PrismaClient, Sale } from '@prisma/client'
-import type { KaspaAdapter, KaspaTransaction, AddressTransactionsResult } from '@ghostpass/shared'
+import type { KaspaAdapter, KaspaTransaction, AddressTransactionsResult } from '@tickasting/shared'
 import { TreasuryScanner } from './scanner.js'
 
 // Mock logger that captures nothing
@@ -48,7 +48,7 @@ function mockTx(txid: string, overrides: Partial<KaspaTransaction> = {}): KaspaT
         address: 'kaspa:qtest123',
       },
     ],
-    payload: '475053310100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    payload: '544b53310100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     ...overrides,
   }
 }

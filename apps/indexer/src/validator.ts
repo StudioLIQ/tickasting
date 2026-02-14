@@ -1,15 +1,15 @@
 /**
  * Purchase Attempt Validator
  *
- * Validates purchase attempts according to GhostPass rules:
+ * Validates purchase attempts according to Tickasting rules:
  * - Amount: must match ticketPriceSompi
  * - Payload: must be valid v1 format with correct saleId
  * - PoW: must pass difficulty check
  */
 
 import type { PrismaClient, Sale, PurchaseAttempt, ValidationStatus } from '@prisma/client'
-import type { KaspaAdapter, KaspaTransaction } from '@ghostpass/shared'
-import { decodePayload, PayloadError, MAGIC, PAYLOAD_VERSION, verifyPow } from '@ghostpass/shared'
+import type { KaspaAdapter, KaspaTransaction } from '@tickasting/shared'
+import { decodePayload, PayloadError, MAGIC, PAYLOAD_VERSION, verifyPow } from '@tickasting/shared'
 
 export interface ValidatorConfig {
   logger?: {

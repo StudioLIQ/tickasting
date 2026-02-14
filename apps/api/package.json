@@ -1,5 +1,5 @@
 {
-  "name": "@ghostpass/api",
+  "name": "@tickasting/api",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -22,7 +22,7 @@
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@fastify/websocket": "^11.0.1",
-    "@ghostpass/shared": "workspace:*",
+    "@tickasting/shared": "workspace:*",
     "@prisma/client": "^5.22.0",
     "fastify": "^5.2.0",
     "zod": "^3.24.1"

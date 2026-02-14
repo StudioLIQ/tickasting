@@ -65,7 +65,7 @@ describe('ticket', () => {
   describe('encodeTicketQR', () => {
     it('should encode ticket data to QR string', () => {
       const qr = encodeTicketQR(sampleData, testSecret)
-      expect(qr.startsWith('GP1|')).toBe(true)
+      expect(qr.startsWith('TK1|')).toBe(true)
       expect(qr.split('|').length).toBe(5)
     })
 
@@ -96,7 +96,7 @@ describe('ticket', () => {
     })
 
     it('should reject wrong magic', () => {
-      const qr = encodeTicketQR(sampleData, testSecret).replace('GP1', 'GP2')
+      const qr = encodeTicketQR(sampleData, testSecret).replace('TK1', 'GP2')
       const result = decodeTicketQR(qr, testSecret)
       expect(result.valid).toBe(false)
       expect(result.error).toContain('wrong magic')

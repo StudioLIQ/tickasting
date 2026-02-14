@@ -1,9 +1,9 @@
 /**
- * GhostPass Anti-Bot PoW (Proof of Work)
+ * Tickasting Anti-Bot PoW (Proof of Work)
  *
  * Puzzle Definition (v1):
  * - Hash: SHA-256
- * - Input: "GhostPassPoW|v1|{saleId}|{buyerAddrHashHex}|{nonceUint64}"
+ * - Input: "TickastingPoW|v1|{saleId}|{buyerAddrHashHex}|{nonceUint64}"
  * - Condition: leading zero bits >= difficulty
  *
  * Difficulty examples:
@@ -31,7 +31,7 @@ export interface PowResult {
  * Build the PoW message to hash
  */
 export function buildPowMessage(saleId: string, buyerAddrHash: string, nonce: bigint): string {
-  return `GhostPassPoW|v1|${saleId}|${buyerAddrHash}|${nonce.toString()}`
+  return `TickastingPoW|v1|${saleId}|${buyerAddrHash}|${nonce.toString()}`
 }
 
 /**

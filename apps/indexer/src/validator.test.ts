@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PrismaClient, Sale, PurchaseAttempt } from '@prisma/client'
-import type { KaspaAdapter, KaspaTransaction } from '@ghostpass/shared'
-import { encodePayload, solvePow, computeBuyerAddrHash } from '@ghostpass/shared'
+import type { KaspaAdapter, KaspaTransaction } from '@tickasting/shared'
+import { encodePayload, solvePow, computeBuyerAddrHash } from '@tickasting/shared'
 import { PurchaseValidator, validatePayloadOnly } from './validator.js'
 
 // Mock logger
@@ -45,7 +45,7 @@ function generateValidPayload(sale: Sale): { payloadHex: string; buyerAddrHash: 
   })
 
   const payloadHex = encodePayload({
-    magic: 'GPS1',
+    magic: 'TKS1',
     version: 0x01,
     saleId: sale.id,
     buyerAddrHash,
@@ -256,7 +256,7 @@ describe('PurchaseValidator', () => {
 
     // Create payload with wrong nonce (PoW will fail)
     const payloadHex = encodePayload({
-      magic: 'GPS1',
+      magic: 'TKS1',
       version: 0x01,
       saleId: testSale.id,
       buyerAddrHash,
@@ -362,7 +362,7 @@ describe('PurchaseValidator', () => {
     const buyerAddrHash = computeBuyerAddrHash(buyerAddress)
 
     // Manually create payload with wrong magic
-    // GPS1 in hex is 47505331, we'll use XXXX (58585858)
+    // TKS1 in hex is 544b5331, we'll use XXXX (58585858)
     const invalidPayload =
       '58585858' + // Wrong magic
       '01' + // version

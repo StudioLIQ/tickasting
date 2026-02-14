@@ -1,5 +1,5 @@
 /**
- * Merkle Tree utilities for GhostPass
+ * Merkle Tree utilities for Tickasting
  *
  * Used to generate tamper-proof commitment of allocation results.
  * The merkle root can be committed to the blockchain for verification.
@@ -235,10 +235,10 @@ export function formatMerkleRootForPayload(root: string): string {
 
 /**
  * Create commit payload for merkle root
- * Format: "GPCommit|v1|{saleId}|{merkleRoot}"
+ * Format: "TKCommit|v1|{saleId}|{merkleRoot}"
  */
 export function createCommitPayload(saleId: string, merkleRoot: string): string {
-  const payload = `GPCommit|v1|${saleId}|${merkleRoot}`
+  const payload = `TKCommit|v1|${saleId}|${merkleRoot}`
   // Convert to hex
   return Buffer.from(payload, 'utf-8').toString('hex')
 }
@@ -258,7 +258,7 @@ export function parseCommitPayload(
     }
 
     const [magic, version, saleId, merkleRoot] = parts
-    if (magic !== 'GPCommit' || version !== 'v1' || !saleId || !merkleRoot) {
+    if (magic !== 'TKCommit' || version !== 'v1' || !saleId || !merkleRoot) {
       return null
     }
 

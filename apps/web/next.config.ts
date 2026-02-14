@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@ghostpass/shared'],
+  transpilePackages: ['@tickasting/shared'],
 }
 
 export default nextConfig

@@ -5,7 +5,7 @@
  * For production, consider using a WebWorker for heavy computation.
  */
 
-import { encodePayload, computeBuyerAddrHash } from '@ghostpass/shared'
+import { encodePayload, computeBuyerAddrHash } from '@tickasting/shared'
 
 export interface PowSolveOptions {
   saleId: string
@@ -25,7 +25,7 @@ export interface PowSolveResult {
  * Build PoW message string
  */
 function buildPowMessage(saleId: string, buyerAddrHash: string, nonce: bigint): string {
-  return `GhostPassPoW|v1|${saleId}|${buyerAddrHash}|${nonce.toString()}`
+  return `TickastingPoW|v1|${saleId}|${buyerAddrHash}|${nonce.toString()}`
 }
 
 /**
@@ -87,7 +87,7 @@ export async function solvePow(options: PowSolveOptions): Promise<PowSolveResult
       if (zeroBits >= difficulty) {
         // Found valid nonce!
         const payloadHex = encodePayload({
-          magic: 'GPS1',
+          magic: 'TKS1',
           version: 0x01,
           saleId,
           buyerAddrHash,

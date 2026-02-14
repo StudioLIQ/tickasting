@@ -1,10 +1,10 @@
-# GhostPass Bot Simulator
+# Tickasting Bot Simulator
 
-Stress testing and demo tools for GhostPass fair ticketing system.
+Stress testing and demo tools for Tickasting fair ticketing system.
 
 ## Overview
 
-This simulator demonstrates that GhostPass ordering is **deterministic** even when:
+This simulator demonstrates that Tickasting ordering is **deterministic** even when:
 - Multiple bots attack simultaneously
 - Network delivers transactions in random order
 - Same blockchain data → Same ranking, every time
@@ -140,7 +140,7 @@ Ensure the sale exists and is in `live` or `finalizing` status.
 ### Database connection error
 Check `DATABASE_URL` in `.env`:
 ```
-DATABASE_URL="postgresql://postgres:password@localhost:5433/ghostpass"
+DATABASE_URL="postgresql://postgres:password@localhost:5433/tickasting"
 ```
 
 ### Prisma client not found

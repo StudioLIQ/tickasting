@@ -6,7 +6,7 @@
  */
 
 import type { PrismaClient, Sale } from '@prisma/client'
-import type { KaspaAdapter, KaspaTransaction } from '@ghostpass/shared'
+import type { KaspaAdapter, KaspaTransaction } from '@tickasting/shared'
 
 export interface ScannerConfig {
   /** Batch size for fetching transactions from adapter */

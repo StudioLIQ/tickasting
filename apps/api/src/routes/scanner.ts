@@ -11,7 +11,7 @@ import {
   decodeTicketQR,
   encodeTicketQR,
   type TicketQRData,
-} from '@ghostpass/shared'
+} from '@tickasting/shared'
 
 // Get secret from env (should be set in production)
 const TICKET_SECRET = process.env['TICKET_SECRET'] || 'dev-ticket-secret-change-in-prod'

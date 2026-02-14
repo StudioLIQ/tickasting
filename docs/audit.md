@@ -1,10 +1,10 @@
-# GhostPass Audit & Verification Guide
+# Tickasting Audit & Verification Guide
 
-This document explains how to independently verify GhostPass sale results.
+This document explains how to independently verify Tickasting sale results.
 
 ## Overview
 
-GhostPass uses three layers of verification:
+Tickasting uses three layers of verification:
 1. **Deterministic Ordering** - Results are computed from on-chain data
 2. **Merkle Root** - Cryptographic commitment of all winners
 3. **Commit Transaction** - Merkle root recorded on Kaspa blockchain
@@ -109,7 +109,7 @@ The commit transaction contains the merkle root in its payload.
 ### Payload Format
 
 ```
-GPCommit|v1|{saleId}|{merkleRoot}
+TKCommit|v1|{saleId}|{merkleRoot}
 ```
 
 Encoded as hex in the transaction payload.
@@ -134,7 +134,7 @@ function parseCommitPayload(payloadHex) {
   const payload = Buffer.from(payloadHex, 'hex').toString('utf-8')
   const parts = payload.split('|')
 
-  if (parts.length !== 4 || parts[0] !== 'GPCommit' || parts[1] !== 'v1') {
+  if (parts.length !== 4 || parts[0] !== 'TKCommit' || parts[1] !== 'v1') {
     return null
   }
 
@@ -204,7 +204,7 @@ GET /v1/sales/{saleId}/merkle-proof?txid={txid}
 |-----------|-------------------|
 | Kaspa Blockchain | Decentralized consensus |
 | kas.fyi API | Trusted data source (or use own node) |
-| GhostPass Server | Zero trust - results are verifiable |
+| Tickasting Server | Zero trust - results are verifiable |
 | Merkle Commit | Immutable on-chain record |
 
 ## 7. Common Issues
@@ -215,7 +215,7 @@ GET /v1/sales/{saleId}/merkle-proof?txid={txid}
 - Verify you're using the same finality_depth
 - Ensure all fields are in the correct format
 
-### Q: How do I verify without trusting GhostPass?
+### Q: How do I verify without trusting Tickasting?
 
 1. Run your own Kaspa node
 2. Query treasury address transactions directly
@@ -223,6 +223,6 @@ GET /v1/sales/{saleId}/merkle-proof?txid={txid}
 4. Compute merkle root independently
 5. Verify against on-chain commit transaction
 
-### Q: Can GhostPass manipulate results?
+### Q: Can Tickasting manipulate results?
 
 No. The ordering rules are deterministic and based on on-chain data. The merkle root is committed to the blockchain before results can be changed. Any manipulation would produce a different merkle root that wouldn't match the on-chain commitment.

@@ -1,5 +1,5 @@
 /**
- * GhostPass Demo Scenario Script
+ * Tickasting Demo Scenario Script
  *
  * Runs a complete demo:
  * 1. Creates a test event and sale
@@ -35,7 +35,7 @@ async function runDemo(config: DemoConfig): Promise<void> {
 
   console.log(`
 ╔══════════════════════════════════════════════════════════════╗
-║                    🎫 GhostPass Demo                         ║
+║                    🎫 Tickasting Demo                         ║
 ║           Fair Ticketing on Kaspa Blockchain                 ║
 ╚══════════════════════════════════════════════════════════════╝
 `)
@@ -48,7 +48,7 @@ async function runDemo(config: DemoConfig): Promise<void> {
     data: {
       id: randomUUID(),
       organizerId: 'demo-organizer',
-      title: `GhostPass Demo Event - ${new Date().toISOString().slice(0, 10)}`,
+      title: `Tickasting Demo Event - ${new Date().toISOString().slice(0, 10)}`,
       venue: 'Virtual Demo Arena',
       status: 'published',
     },

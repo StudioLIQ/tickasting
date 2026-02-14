@@ -1,5 +1,5 @@
 {
-  "name": "@ghostpass/web",
+  "name": "@tickasting/web",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@ghostpass/shared": "workspace:*"
+    "@tickasting/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

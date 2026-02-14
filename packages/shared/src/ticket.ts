@@ -45,11 +45,11 @@ export function verifyTicketSignature(
 
 /**
  * Encode ticket data to QR string
- * Format: GP1|{ticketId}|{saleId}|{txid}|{signature}
+ * Format: TK1|{ticketId}|{saleId}|{txid}|{signature}
  */
 export function encodeTicketQR(data: TicketQRData, secret: string): string {
   const signature = signTicketData(data, secret)
-  return `GP1|${data.ticketId}|${data.saleId}|${data.txid}|${signature}`
+  return `TK1|${data.ticketId}|${data.saleId}|${data.txid}|${signature}`
 }
 
 /**
@@ -67,7 +67,7 @@ export function decodeTicketQR(
 
   const [magic, ticketId, saleId, txid, signature] = parts
 
-  if (magic !== 'GP1') {
+  if (magic !== 'TK1') {
     return { valid: false, error: 'Invalid QR format: wrong magic' }
   }
 

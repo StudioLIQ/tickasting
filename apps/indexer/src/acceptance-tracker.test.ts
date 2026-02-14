@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PrismaClient, Sale, PurchaseAttempt } from '@prisma/client'
-import type { KaspaAdapter, TransactionAcceptance, KaspaBlock } from '@ghostpass/shared'
+import type { KaspaAdapter, TransactionAcceptance, KaspaBlock } from '@tickasting/shared'
 import { AcceptanceTracker } from './acceptance-tracker.js'
 
 // Mock logger

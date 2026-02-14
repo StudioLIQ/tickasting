@@ -621,7 +621,7 @@
 - mismatch 탐지 케이스에서 운영자 알림 확인 가능
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1047,3 +1047,10 @@
   - TickastingSale.sol에 모든 AC 충족: claim/mint, supply cap, duplicate prevention
   - 5개 이벤트 구현: SaleCreated, TicketTypeDefined, ClaimOpened, TicketClaimed, SaleFinalized
   - Merkle proof 기반 claim 검증, ReentrancyGuard 적용
+
+- **GP-024** (2026-02-14): Indexer/API 컨트랙트 이벤트 연동 완료
+  - POST /v1/sales/:saleId/claims/sync — on-chain claim 동기화
+  - GET /v1/sales/:saleId/claims — claim 상태 조회
+  - GET /v1/sales/:saleId/claims/consistency — 오프체인 winners vs 온체인 claims 정합성 체크
+  - PATCH /v1/sales/:saleId/contract — 컨트랙트 주소 등록
+  - Ticket에 claimTxid, tokenId, ticketTypeId 연동

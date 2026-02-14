@@ -601,7 +601,7 @@
 - 동일 winner의 중복 claim 차단
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14) — Implemented as part of GP-022
 
 ---
 
@@ -1042,3 +1042,8 @@
   - deploy script (localhost/sepolia), export-abi script
   - ABI exported to packages/shared/abi/TickastingSale.json (64 entries)
   - pnpm-workspace에 contracts 등록
+
+- **GP-023** (2026-02-14): GP-022에서 함께 완료
+  - TickastingSale.sol에 모든 AC 충족: claim/mint, supply cap, duplicate prevention
+  - 5개 이벤트 구현: SaleCreated, TicketTypeDefined, ClaimOpened, TicketClaimed, SaleFinalized
+  - Merkle proof 기반 claim 검증, ReentrancyGuard 적용

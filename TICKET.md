@@ -803,7 +803,7 @@
 - 재배포/재시작 후 인덱싱 재개가 안정적
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1109,6 +1109,13 @@
   - 브랜딩 수정: GhostPass → Tickasting (live/results 페이지)
   - getTicketTypes API 호출 추가 (live/results 양쪽)
   - typecheck 통과
+
+- **GP-032** (2026-02-14): Railway 배포 토폴로지 반영 완료
+  - DEPLOY.md에 Ponder 헬스체크 정책 추가 (경로/포트/인터벌)
+  - DEPLOY.md에 Ponder 초기 sync / 재동기화 runbook 추가
+  - DEPLOY.md에 Ponder 장애 대응 가이드 추가 (7.4~7.6)
+  - 데모 체크리스트에 Ponder 상태 확인 항목 추가
+  - 업데이트 배포 루틴에 Ponder 재인덱싱 반영
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

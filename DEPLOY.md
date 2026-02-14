@@ -260,12 +260,14 @@ curl -X POST https://<tickasting-api-public-domain>/v1/sales/<saleId>/publish
 
 ## 6) 데모 당일 체크리스트
 
-1. Railway API/Indexer 상태 Green
-2. Railway Postgres 연결 정상
-3. Vercel 최신 배포가 `Ready`
-4. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`가 Railway API 도메인으로 설정됨
-5. sale의 `network=testnet`
-6. 지갑 네트워크 testnet
+1. Railway API 상태 Green (`curl /health` → `"ponder": "ok"`)
+2. Railway Ponder 기동 중 (로그에서 indexed block 확인)
+3. Railway Postgres 연결 정상
+4. Vercel 최신 배포가 `Ready`
+5. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`가 Railway API 도메인으로 설정됨
+6. sale의 `network=testnet`
+7. 지갑 네트워크 testnet
+8. Ponder가 컨트랙트 이벤트를 인덱싱 중인지 확인
 
 ---
 
@@ -281,12 +283,46 @@ curl -X POST https://<tickasting-api-public-domain>/v1/sales/<saleId>/publish
 - `NEXT_PUBLIC_WS_URL`가 `wss://...railway.app`인지 확인
 - API 로그에서 `/ws/sales/:saleId` 연결 로그 확인
 
-## 7.3 Indexer가 구매 감지 못함
+## 7.3 Indexer가 구매 감지 못함 (Legacy)
 
 - Indexer env `KASPA_NETWORK=testnet` 확인
 - sale이 `live` 상태인지 확인
 - `treasuryAddress`가 testnet 주소인지 확인
 - `KASFYI_API_KEY` 추가 후 재시도
+
+## 7.4 Ponder 인덱싱 중단/지연
+
+- Railway Ponder 서비스 로그 확인 (error/warning)
+- `PONDER_RPC_URL_11155111` RPC URL 정상 여부 확인
+- `TICKASTING_CONTRACT_ADDRESS` 값이 올바른지 확인
+- Ponder 재시작 시 체크포인트부터 자동 재개됨
+- 완전 재인덱싱이 필요한 경우: Postgres에서 Ponder 스키마의 테이블 DROP 후 재시작
+
+## 7.5 Ponder 헬스체크
+
+Ponder 내장 엔드포인트:
+- `GET /health` — 기동 상태
+- `GET /ready` — 인덱싱 준비 완료 여부
+- `GET /status` — 인덱싱 진행 상태
+
+Railway 헬스체크 설정:
+- Path: `/health`
+- Port: `42069` (Ponder 기본 포트)
+- Interval: 30s
+- Timeout: 10s
+
+## 7.6 Ponder 초기 sync / 재동기화
+
+Ponder는 `startBlock`부터 현재 블록까지 이벤트를 인덱싱합니다.
+
+초기 sync 속도 향상:
+- `TICKASTING_START_BLOCK`을 컨트랙트 배포 블록으로 설정
+- Alchemy/Infura의 archive 노드 RPC 사용 권장
+
+재동기화(전체):
+1. Ponder 서비스 중지
+2. Postgres에서 Ponder 관련 테이블 DROP
+3. Ponder 재시작 → 처음부터 재인덱싱
 
 ---
 
@@ -349,23 +385,26 @@ curl -X PATCH https://<api-domain>/v1/sales/<saleId>/contract \
 
 ---
 
-## 9) 데모 체크리스트 (컨트랙트 포함)
+## 9) 데모 체크리스트 (컨트랙트 + Ponder 포함)
 
-1. Railway API/Indexer 상태 Green
-2. Railway Postgres 연결 정상
-3. Vercel 최신 배포 Ready
-4. Sepolia 컨트랙트 배포 완료 + 주소 등록
-5. sale에 ticket types 등록 (VIP/R/GEN)
-6. `network=testnet`, 지갑 testnet
-7. claim 스모크 테스트: 1건 claim → tokenId 확인
+1. Railway API 상태 Green (`/health` → `"ponder": "ok"`)
+2. Railway Ponder 기동 + 인덱싱 진행 중 (`/ready` → 200)
+3. Railway Postgres 연결 정상
+4. Vercel 최신 배포 Ready
+5. Sepolia 컨트랙트 배포 완료 + 주소 등록
+6. Ponder env에 `TICKASTING_CONTRACT_ADDRESS` 설정
+7. sale에 ticket types 등록 (VIP/R/GEN)
+8. `network=testnet`, 지갑 testnet
+9. claim 스모크 테스트: 1건 claim → Ponder에서 claim 인덱싱 확인
+10. API `/v1/sales/<saleId>/claims?source=ponder` 응답 확인
 
 ---
 
 ## 10) 업데이트 배포 루틴
 
 1. 코드 머지
-2. Railway API/Indexer 자동 재배포 확인
+2. Railway API/Ponder 자동 재배포 확인
 3. 필요 시 API 서비스에서 `pnpm --filter @tickasting/api db:push`
-4. 컨트랙트 변경 시: 재배포 + ABI export + 주소 갱신
+4. 컨트랙트 변경 시: 재배포 + ABI export + 주소 갱신 + Ponder 재인덱싱
 5. Vercel 재배포
-6. 스모크 테스트 1회 재실행
+6. Ponder `/ready` 확인 후 스모크 테스트 1회 재실행

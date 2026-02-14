@@ -1,8 +1,23 @@
 /**
- * API Client for GhostPass Backend
+ * API Client for Tickasting Backend
  */
 
 import { config } from './config'
+
+export interface TicketType {
+  id: string
+  saleId: string
+  code: string
+  name: string
+  priceSompi: string
+  supply: number
+  metadataUri: string | null
+  perk: Record<string, unknown> | null
+  sortOrder: number
+  createdAt: string
+  minted?: number
+  remaining?: number
+}
 
 export interface Sale {
   id: string
@@ -20,8 +35,10 @@ export interface Sale {
   status: string
   merkleRoot: string | null
   commitTxid: string | null
+  claimContractAddress: string | null
   createdAt: string
   eventTitle?: string
+  ticketTypes?: TicketType[]
 }
 
 export interface MyStatus {
@@ -139,6 +156,44 @@ export async function getMerkleProof(saleId: string, txid: string): Promise<Merk
   )
   if (!res.ok) {
     throw new Error(`Failed to fetch merkle proof: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface TicketTypesResponse {
+  saleId: string
+  ticketTypes: (TicketType & { minted: number; remaining: number })[]
+}
+
+export async function getTicketTypes(saleId: string): Promise<TicketTypesResponse> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/ticket-types`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ticket types: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface ClaimStatusResponse {
+  saleId: string
+  totalTickets: number
+  claimed: number
+  unclaimed: number
+  tickets: Array<{
+    id: string
+    originTxid: string
+    ticketTypeCode: string | null
+    ownerAddress: string
+    claimTxid: string | null
+    tokenId: string | null
+    status: string
+    issuedAt: string
+  }>
+}
+
+export async function getClaimStatus(saleId: string): Promise<ClaimStatusResponse> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/claims`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch claim status: ${res.status}`)
   }
   return res.json()
 }

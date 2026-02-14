@@ -641,7 +641,7 @@
 - 품절 타입 선택 불가
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1054,3 +1054,10 @@
   - GET /v1/sales/:saleId/claims/consistency — 오프체인 winners vs 온체인 claims 정합성 체크
   - PATCH /v1/sales/:saleId/contract — 컨트랙트 주소 등록
   - Ticket에 claimTxid, tokenId, ticketTypeId 연동
+
+- **GP-025** (2026-02-14): Web 티켓 타입 선택 + Claim UX 완료
+  - Sale 페이지에 ticket type 카드 UI (선택/가격/잔여량/품절)
+  - 타입별 가격으로 구매 버튼 동적 변경
+  - Winner claim 섹션 (MetaMask 안내 + 컨트랙트 주소)
+  - API client에 TicketType, ClaimStatus 인터페이스 추가
+  - getTicketTypes(), getClaimStatus() API 함수 추가

@@ -1,4 +1,4 @@
-# GhostPass (Kaspa) — 공정 대기열 기반 제로-랙 티켓팅 엔진
+# Tickasting (Kaspa) — 공정 대기열 기반 제로-랙 티켓팅 엔진
 
 > **Principle:** 서버가 “줄”을 만들지 않는다. 체인의 공개 데이터로 누구나 순번을 재현·검증한다.
 
@@ -34,7 +34,7 @@
 
 <a id="sec-0"></a>
 ## 0. 한 줄 요약
-GhostPass는 “서버가 줄을 세우지 않는” 티켓팅 시스템이다. 사용자가 Kaspa 트랜잭션을 발행하면, GhostPass는 **온체인 acceptance 기반의 결정적(Deterministic) 규칙**으로 순번을 산출하고 그 순번대로 티켓을 배분한다. 결과는 누구나 재현·검증할 수 있도록 스냅샷/증빙(merkle commit 등)을 제공한다.
+Tickasting는 “서버가 줄을 세우지 않는” 티켓팅 시스템이다. 사용자가 Kaspa 트랜잭션을 발행하면, Tickasting는 **온체인 acceptance 기반의 결정적(Deterministic) 규칙**으로 순번을 산출하고 그 순번대로 티켓을 배분한다. 결과는 누구나 재현·검증할 수 있도록 스냅샷/증빙(merkle commit 등)을 제공한다.
 
 ---
 
@@ -60,7 +60,7 @@ GhostPass는 “서버가 줄을 세우지 않는” 티켓팅 시스템이다. 
 ## 2. 해결 전략(Solution Strategy)
 
 ### 2.1 “공정성”의 현실적 정의
-GhostPass는 “누가 0.001초 먼저 눌렀냐” 같은 물리시간을 증명한다고 주장하지 않는다.
+Tickasting는 “누가 0.001초 먼저 눌렀냐” 같은 물리시간을 증명한다고 주장하지 않는다.
 대신 다음을 보장한다:
 
 1) **서버가 순번을 만들지 않는다.**
@@ -85,9 +85,10 @@ GhostPass는 “누가 0.001초 먼저 눌렀냐” 같은 물리시간을 증�
 - P0: 온체인 기반 공정 대기열 + 실시간 대시보드
 - P0: Anti-bot 비용 부과(클라 경량 PoW) + 검증 가능
 - P0: 결과 스냅샷(랭킹/당첨) 생성 + 검증 UX
+- P0: 멀티 티켓 타입(VIP/R/GEN 등) 지원
+- P0: 컨트랙트 기반 claim/mint 플로우(당첨자 온체인 클레임)
 - P1: merkle root commit(결과 조작 불가를 한 방에 보여주는 증빙)
 - P1: 스캐너(입장 QR 검증) MVP
-- P2: KRC-721 티켓 발행(옵션)
 - P2: 리셀 정책(가격 상한 자체가 아니라 “입장 유효성(attestation)”으로 실효성 확보)
 
 ### 3.2 비목표(Non-Goals)
@@ -112,7 +113,7 @@ GhostPass는 “누가 0.001초 먼저 눌렀냐” 같은 물리시간을 증�
 3) (옵션) “구매 Preflight”(난이도/가격/주소/정책 확인)
 4) 브라우저에서 PoW 계산(웹워커)
 5) 지갑으로 KAS 전송(tx payload 포함 가능하면 포함)
-6) indexer가 treasury 주소 입금 tx 감지
+6) Ponder 인덱서가 treasury 주소 입금/이벤트 감지
 7) tx 검증(금액/주소/payload/PoW) → accepted/confirmations 추적
 8) Provisional → Final 확정
 9) supply 내 rank면 티켓 발급(= winner)
@@ -125,15 +126,15 @@ sequenceDiagram
   participant Web as Web App
   participant Wallet as Wallet
   participant Chain as Kaspa Network
-  participant Indexer as Indexer/Engine
+  participant Indexer as Ponder Indexer
   participant API as API Server
 
   Buyer->>Web: Open sale page
   Buyer->>Web: Run client PoW (WebWorker)
   Web->>Wallet: Request send KAS (+ optional payload)
   Wallet->>Chain: Broadcast purchase tx
-  Indexer-->>Chain: Poll/subscribe address txs
-  Indexer->>Indexer: Validate amount/payload/PoW
+  Indexer-->>Chain: Index tx/events
+  Indexer->>Indexer: Persist indexed state
   Indexer-->>Chain: Track acceptance + confirmations
   Indexer-->>API: Emit rank updates (WS/SSE)
   API-->>Web: Stream provisional/final status
@@ -148,10 +149,12 @@ sequenceDiagram
 
 ### 5.1 Hackathon MVP (반드시 구현)
 - 판매(Sale) 생성/오픈/종료
+- sale 하위 멀티 티켓 타입 정의(타입별 가격/수량)
 - Buyer 결제 tx 생성/브로드캐스트(지갑 연동)
 - Tx 감지(주소 기반)
 - acceptance/confirmations 추적
 - 결정적 순번 산출 + Provisional/Final 상태
+- winner의 컨트랙트 claim/mint
 - 실시간 대시보드(WebSocket/SSE)
 - 결과 페이지 + allocation.json(당첨/낙첨 스냅샷)
 - 개발/실행 재현 가능한 README(영문)
@@ -160,56 +163,69 @@ sequenceDiagram
 - merkle root commit tx(결과 스냅샷의 해시를 체인에 커밋)
 - Ticket QR / Scanner App(웹)
 - 공식 리셀 + attestation(입장 유효성 기반 암표 억제)
-- KRC-721 티켓 민팅(옵션)
+- 타입별 특전(perk)/동적 가격 정책/화이트리스트 라운드
 
 ---
 
 <a id="sec-6"></a>
 ## 6. 시스템 아키텍처(High Level)
 
-### 6.1 컴포넌트
-- Web App (Next.js / React / TS)
-- API Server (Node.js TS, Fastify 또는 Nest)
-- Indexer/Engine (Node.js TS 또는 Rust; MVP는 Node 권장)
-- DB: PostgreSQL + Redis
-- Observability: Sentry + Prometheus/Grafana(옵션)
-- Kaspa 연결(플러그형):
-    - Adapter A: Kas.fyi Developer Platform API(빠른 MVP)
-    - Adapter B: Direct Node RPC(wRPC) + 자체 노드(정석)
+> **결정 (GP-027, 2026-02-14):** 인덱싱 런타임은 Ponder(`apps/ponder`)로 전환한다.
+> 기존 `apps/indexer`는 **deprecated**이며, 전환 완료(GP-035) 후 제거한다.
+> 상세 결정 기록: `docs/architecture.md`
 
-### 6.1.1 Architecture Diagram
+### 6.1 런타임 토폴로지 (확정)
+
+| Component | Runtime | Role |
+|-----------|---------|------|
+| Web App | Vercel | Next.js, presentation + client PoW |
+| API Server | Railway | Fastify, domain logic / auth / aggregation |
+| Ponder Worker | Railway | Chain event/tx indexing (target) |
+| PostgreSQL | Railway | Single source of truth |
+| Contract | Sepolia (EVM) | ERC-721 claim/mint (TickastingSale) |
+| ~~Indexer~~ | ~~Railway~~ | ~~Legacy custom poller (deprecated)~~ |
+
+### 6.1.1 데이터 소스 책임 분리
+
+- **Ponder** (`apps/ponder`): 체인 이벤트/트랜잭션 인덱싱. Postgres에 인덱싱 결과를 적재. Reorg 처리, 체크포인팅, 리플레이 내장.
+- **API** (`apps/api`): 도메인 로직, 권한, 집계. Ponder 테이블 + 자체 도메인 테이블에서 읽기. 순번 계산, allocation 스냅샷 생성, buyer/organizer 엔드포인트 서빙. 체인 직접 폴링 금지.
+- **Web** (`apps/web`): 프레젠테이션. API 호출 + WebSocket 실시간 연결. 클라이언트 PoW(WebWorker).
+
+### 6.1.2 Kaspa 연결(플러그형)
+- Adapter A: Kas.fyi Developer Platform API(빠른 MVP)
+- Adapter B: Direct Node RPC(wRPC) + 자체 노드(정석)
+
+### 6.1.3 Architecture Diagram
 ```mermaid
 flowchart LR
   subgraph Client
-    Web[Web App\nNext.js/React]
-    Wallet[Kaspa Wallet\n(e.g. KasWare)]
+    Web[Web App\nVercel / Next.js]
+    Wallet[Kaspa Wallet\ne.g. KasWare]
   end
 
-  subgraph Backend
-    API[API Server\nFastify/Nest]
-    Indexer[Indexer/Engine\nOrdering + Validation]
+  subgraph "Railway Backend"
+    API[API Server\nFastify]
+    Ponder[Ponder Worker\nEvent/Tx Indexing]
     Adapter[Kaspa Adapter\nAPI or wRPC]
     DB[(PostgreSQL)]
-    Redis[(Redis)]
   end
 
   subgraph Chain
     Kaspa[Kaspa Network\nBlocks/Tx/Acceptance]
+    EVM[EVM Testnet\nSepolia - TickastingSale]
   end
 
   Web --> API
   Web --> Wallet
   Wallet --> Kaspa
-  Indexer --> DB
-  Indexer --> Redis
+  Ponder --> DB
   API --> DB
-  API --> Redis
-  Indexer --> Adapter --> Kaspa
-  Indexer --> API
+  Ponder --> Adapter --> Kaspa
+  Ponder --> EVM
 ```
 
 ### 6.2 “Kaspa Adapter” 설계 원칙
-GhostPass는 Kaspa 연결 계층을 인터페이스로 추상화한다.
+Tickasting는 Kaspa 연결 계층을 인터페이스로 추상화한다. 인덱싱 런타임은 Ponder를 기본으로 사용한다.
 
 #### KaspaAdapter 인터페이스(개념)
 - getAddressTransactions(address, cursor?, includePayload?)
@@ -229,14 +245,14 @@ MVP에서는 “주소 거래 목록 + tx acceptance/confirmations”만 있어�
 
 ### 7.1 구매 트랜잭션 정의
 - Output: treasury_address로 ticket_price_sompi (정확히) 전송
-- payload(가능한 경우): GhostPass 메타데이터 + PoW nonce 포함
+- payload(가능한 경우): Tickasting 메타데이터 + PoW nonce 포함
 
 > 지갑/SDK가 payload 지원하면 반드시 사용한다. payload가 없다면 “고유 결제 주소 per sale” 방식으로 최소 MVP는 가능하지만, PoW/식별력이 약해진다. MVP에서는 payload 지원 지갑(예: KasWare)의 sendKaspa(payload 옵션)를 우선 타깃으로 한다.
 
 ### 7.2 Payload 포맷 v1 (hex)
 고정 바이너리 → hex 문자열로 넣는다.
 
-- magic(4): "GPS1"
+- magic(4): "TKS1"
 - version(1): 0x01
 - saleId(16): UUIDv4 bytes
 - buyerAddrHash(20): hash160(address string) 또는 sha256(address) 앞 20바이트
@@ -254,6 +270,15 @@ MVP에서는 “주소 거래 목록 + tx acceptance/confirmations”만 있어�
     - PoW 검증 통과
 - accepted=true 인 tx만 큐 후보로 편입(accepted 추적은 Adapter로 구현)
 
+### 7.4 Contract 책임 범위(신규)
+- 컨트랙트는 “누가 어떤 티켓 타입을 claim 가능한지”를 최종 기록한다.
+- 오프체인 엔진은 rank/winner 계산 후 claim 대상자 목록(또는 증빙)을 제공한다.
+- 컨트랙트는 최소 아래를 강제한다.
+  - 타입별 최대 발행량 초과 금지
+  - 동일 winner의 중복 claim 금지
+  - claim 성공 시 타입/소유자/토큰ID 이벤트 기록
+- 즉, 순위 계산은 오프체인 결정적 엔진, 소유권/타입 귀속은 온체인 컨트랙트로 분리한다.
+
 ---
 
 <a id="sec-8"></a>
@@ -267,7 +292,7 @@ MVP에서는 “주소 거래 목록 + tx acceptance/confirmations”만 있어�
 해시: SHA-256 (브라우저 구현 쉬움)
 
 입력:
-`msg = "GhostPassPoW|v1|" + saleId + "|" + buyerAddrHashHex + "|" + powNonceUint64`
+`msg = "TickastingPoW|v1|" + saleId + "|" + buyerAddrHashHex + "|" + powNonceUint64`
 
 조건:
 `sha256(msg)` 해시의 leading zero bits ≥ difficulty
@@ -294,7 +319,7 @@ difficulty는 sale 설정으로 고정(또는 라운드 단위로 변경 가능)
 - FINAL: confirmations ≥ FINALITY_DEPTH
 
 ### 9.2 순번 산출(결정적 규칙)
-GhostPass는 “결정적 순서 규칙”을 공개한다.
+Tickasting는 “결정적 순서 규칙”을 공개한다.
 
 #### Candidate Set(후보 집합)
 - VALIDATED 이면서 ACCEPTED인 tx들
@@ -365,13 +390,19 @@ GhostPass는 “결정적 순서 규칙”을 공개한다.
 ## 11. 티켓 발급 / 입장 검증
 
 ### 11.1 MVP 티켓(해커톤)
-- DB에 티켓 발급 + QR 생성
+- winner가 컨트랙트에서 타입별 티켓 claim/mint
+- DB에는 claim 결과(토큰ID/tx hash) 캐시 + QR 생성
 - QR에 `ticketId + saleId + txid + serverSignature` 포함(위변조 방지)
 
-### 11.2 확장: KRC-721 티켓(옵션)
-- Winner 확정 후 KRC-721 민팅(가능하면)
-- metadata는 IPFS(또는 중앙 CDN) 링크
-- 입장 검증에서 “현재 소유자” 확인을 위해 인덱서/서드파티 API 필요
+### 11.2 티켓 타입 모델
+- 하나의 sale에 여러 타입을 둔다.
+  - 예: `VIP`, `R`, `GEN`
+- 타입별 필드:
+  - `priceSompi`
+  - `supply`
+  - `metadataUri`
+  - `perk` (옵션, 텍스트/JSON)
+- claim 시 사용자는 당첨된 타입의 티켓만 mint 가능해야 한다.
 
 ### 11.3 암표 실효성 모델(중요)
 - L1에서 가격 상한을 강제하기 어렵다면, **입장(현실)에서 통제**
@@ -388,6 +419,8 @@ GhostPass는 “결정적 순서 규칙”을 공개한다.
 ```http
 POST /v1/events
 POST /v1/events/:eventId/sales
+POST /v1/sales/:saleId/ticket-types
+PATCH /v1/sales/:saleId/ticket-types/:ticketTypeId
 POST /v1/sales/:saleId/publish
 POST /v1/sales/:saleId/finalize
 ```
@@ -395,8 +428,10 @@ POST /v1/sales/:saleId/finalize
 ### 12.2 Buyer
 ```http
 GET  /v1/sales/:saleId
+GET  /v1/sales/:saleId/ticket-types
 POST /v1/sales/:saleId/preflight
 GET  /v1/sales/:saleId/my-status?txid=...
+POST /v1/sales/:saleId/claim
 ```
 
 ### 12.3 Realtime
@@ -443,11 +478,25 @@ POST /v1/scans/redeem
 - `status` (`scheduled|live|finalizing|finalized`)
 - `merkle_root` (nullable)
 - `commit_txid` (nullable)
+- `claim_contract_address` (nullable)
 - `created_at`, `updated_at`
 
-### 13.3 `purchase_attempts`
+### 13.3 `ticket_types` (신규)
 - `id` (uuid)
 - `sale_id`
+- `code` (예: VIP/R/GEN, sale 내 unique)
+- `name`
+- `price_sompi` (bigint)
+- `supply` (int)
+- `metadata_uri`
+- `perk` (json, optional)
+- `sort_order`
+- `created_at`, `updated_at`
+
+### 13.4 `purchase_attempts`
+- `id` (uuid)
+- `sale_id`
+- `requested_ticket_type_id` (nullable)
 - `txid` (unique)
 - `detected_at`
 - `validation_status` (`pending|valid|invalid_*`)
@@ -462,17 +511,20 @@ POST /v1/scans/redeem
 - `final_rank`
 - `last_checked_at`
 
-### 13.4 `tickets`
+### 13.5 `tickets`
 - `id` (uuid)
 - `sale_id`
+- `ticket_type_id`
 - `owner_address`
 - `owner_addr_hash`
 - `origin_txid`
+- `claim_txid` (nullable)
+- `token_id` (nullable)
 - `status` (`issued|redeemed|cancelled`)
 - `qr_signature`
 - `issued_at`, `redeemed_at`
 
-### 13.5 `scans`
+### 13.6 `scans`
 - `id`
 - `ticket_id`
 - `scanned_at`
@@ -529,6 +581,7 @@ POST /v1/scans/redeem
 - Monorepo: pnpm + turbo(또는 nx)
 - Web: Next.js + TypeScript + Tailwind + Zustand
 - API: Node.js TS + Fastify(or Nest) + Zod validation + Socket.IO(ws)
+- Indexing: Ponder
 - DB: Postgres(Prisma) + Redis(ioredis)
 - Test: Vitest + Playwright(옵션)
 - Infra: Docker compose(MVP)
@@ -540,7 +593,8 @@ POST /v1/scans/redeem
 ```text
 apps/web
 apps/api
-apps/indexer
+apps/ponder
+apps/indexer (legacy/deprecated after Ponder migration)
 packages/shared (payload/PoW/ordering utils)
 infra/docker (postgres/redis)
 docs (아키텍처/검증 방법)

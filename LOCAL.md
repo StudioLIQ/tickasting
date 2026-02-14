@@ -3,8 +3,9 @@
 이 문서는 운영 배포 구조(`FE=Vercel`, `BE/DB=Railway`, `Network=testnet`)를 기준으로,
 로컬에서 가장 빠르게 개발/데모 준비하는 방법을 정리합니다.
 
-> 상태: 현재 로컬 인덱싱 런타임은 `apps/indexer`이며, 목표는 Ponder(`apps/ponder`) 전환입니다.  
-> 전환 작업은 `TICKET.md`의 GP-027~034를 기준으로 진행합니다.
+> **아키텍처 결정 (GP-027):** 인덱싱은 Ponder(`apps/ponder`)로 전환한다.
+> `apps/indexer`는 deprecated이며 전환 완료(GP-035) 후 제거한다.
+> 상세: `docs/architecture.md`
 
 ---
 
@@ -18,7 +19,8 @@
 
 ## 모드 B: 전체 로컬 실행 (기능 개발/디버깅용)
 
-- web/api/indexer(legacy) + postgres/redis를 로컬에서 실행
+- web/api/ponder(target) + postgres를 로컬에서 실행
+- 전환 완료 전에는 web/api/indexer(deprecated) + postgres/redis도 가능
 - 코드 수정/디버깅에 적합
 
 ---
@@ -131,6 +133,7 @@ curl http://localhost:4002/stats
 ```
 
 Ponder 전환 후에는 `apps/ponder`의 health/log 확인 절차로 대체합니다.
+`apps/indexer`의 health/stats 엔드포인트는 deprecated이며 전환 완료 후 제거됩니다.
 
 ---
 

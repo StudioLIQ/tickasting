@@ -3,31 +3,37 @@
 이 문서는 Tickasting를 아래 구조로 배포하는 기준 문서입니다.
 
 - FE: Vercel (`apps/web`)
-- BE: Railway (`apps/api`, `apps/indexer` -> `apps/ponder` 전환 예정)
-- DB: Railway PostgreSQL (필요 시 Redis 추가)
-- 온체인: Kaspa testnet (데모/검증 기준)
+- BE API: Railway (`apps/api`)
+- Indexing: Railway (`apps/ponder` — target; `apps/indexer` is deprecated)
+- DB: Railway PostgreSQL (single source of truth)
+- Contract: Sepolia EVM testnet (`contracts/`)
+- Chain: Kaspa testnet (데모/검증 기준)
 
 ---
 
 ## 0) 배포 아키텍처
 
-> 상태: 현재 배포 런타임은 `apps/indexer` 기준이며, 목표 아키텍처는 Ponder(`apps/ponder`)다.  
-> 전환 작업은 `TICKET.md`의 GP-027~034를 따른다.
+> **아키텍처 결정 (GP-027):** 인덱싱은 Ponder(`apps/ponder`)로 전환한다.
+> `apps/indexer`는 deprecated이며 전환 완료(GP-035) 후 제거한다.
+> 상세: `docs/architecture.md`
 
-### 0.1 서비스 구성
+### 0.1 서비스 구성 (목표)
 
-1. `tickasting-web` (Vercel)
-2. `tickasting-api` (Railway, Public)
-3. `tickasting-indexer` (Railway, Private 권장, legacy)
-4. `tickasting-ponder` (Railway, Private 권장, target)
-5. `tickasting-postgres` (Railway PostgreSQL)
+| # | Service | Platform | Visibility |
+|---|---------|----------|------------|
+| 1 | `tickasting-web` | Vercel | Public |
+| 2 | `tickasting-api` | Railway | Public |
+| 3 | `tickasting-ponder` | Railway | Private (target indexer) |
+| 4 | `tickasting-postgres` | Railway | Internal |
+| 5 | ~~`tickasting-indexer`~~ | ~~Railway~~ | ~~Private (deprecated)~~ |
 
 ### 0.2 데이터 흐름
 
-1. 브라우저는 Vercel의 Web 앱 접속
-2. Web은 Railway API(`https://...up.railway.app`) 호출
-3. API/Indexer(Ponder)는 Railway Postgres를 공유
-4. Indexing 계층은 Kaspa testnet(Kas.fyi/API provider)에서 tx/이벤트를 수집
+1. 브라우저 → Vercel Web App 접속
+2. Web → Railway API(`https://...up.railway.app`) 호출
+3. Ponder Worker → Kaspa testnet / EVM Sepolia에서 tx/이벤트 인덱싱
+4. Ponder → Railway Postgres에 인덱싱 결과 적재
+5. API → Postgres에서 도메인 로직/집계 수행
 
 ---
 
@@ -52,13 +58,13 @@
 
 Railway 한 프로젝트에 아래를 만듭니다.
 
-1. `tickasting-api` 서비스
-2. `tickasting-indexer` 서비스 (legacy)
-3. `tickasting-ponder` 서비스 (target)
-4. PostgreSQL 서비스
+1. `tickasting-api` 서비스 (Public Domain)
+2. `tickasting-ponder` 서비스 (Private, 내부 헬스체크만)
+3. PostgreSQL 서비스
+4. (전환 완료 전) `tickasting-indexer` 서비스 (deprecated, Private)
 
 권장:
-- `tickasting-indexer`/`tickasting-ponder`는 Public Domain을 열지 않고 내부 헬스체크만 사용
+- `tickasting-ponder`는 Public Domain을 열지 않고 내부 헬스체크만 사용
 
 ## 2.2 Monorepo 배포 원칙
 
@@ -78,7 +84,25 @@ pnpm --filter @tickasting/api db:generate && pnpm --filter @tickasting/shared bu
 API_HOST=0.0.0.0 API_PORT=${PORT:-4001} pnpm --filter @tickasting/api start
 ```
 
-## 2.4 Indexer 서비스 명령어
+## 2.4 Ponder 서비스 명령어 (target)
+
+> 정확한 빌드/시작 명령은 GP-028에서 확정한다. 아래는 예상 구조다.
+
+- Build Command:
+
+```bash
+pnpm --filter @tickasting/ponder build
+```
+
+- Start Command:
+
+```bash
+pnpm --filter @tickasting/ponder start
+```
+
+## 2.4.1 Indexer 서비스 명령어 (deprecated)
+
+> `apps/indexer`는 deprecated다. Ponder 전환 완료(GP-035) 후 제거 예정.
 
 - Build Command:
 
@@ -90,22 +114,6 @@ pnpm --filter @tickasting/indexer db:generate && pnpm --filter @tickasting/share
 
 ```bash
 INDEXER_PORT=${PORT:-4002} pnpm --filter @tickasting/indexer start
-```
-
-## 2.4.1 Ponder 서비스 명령어 (전환 후)
-
-> 정확한 명령은 GP-028에서 확정한다. 아래는 자리표시자다.
-
-- Build Command (placeholder):
-
-```bash
-pnpm --filter @tickasting/ponder build
-```
-
-- Start Command (placeholder):
-
-```bash
-pnpm --filter @tickasting/ponder start
 ```
 
 ## 2.5 API 환경변수 (`tickasting-api`)

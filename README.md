@@ -1,4 +1,4 @@
-# GhostPass
+# Tickasting
 
 **Fair Ticketing Engine Powered by Kaspa**
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-GhostPass is a zero-lag ticketing system built on Kaspa blockchain. Instead of a central server determining queue order, GhostPass uses on-chain acceptance data to create a **deterministic, verifiable ordering** that anyone can reproduce.
+Tickasting is a zero-lag ticketing system built on Kaspa blockchain. Instead of a central server determining queue order, Tickasting uses on-chain acceptance data to create a **deterministic, verifiable ordering** that anyone can reproduce.
 
 ### Key Features
 
@@ -15,14 +15,14 @@ GhostPass is a zero-lag ticketing system built on Kaspa blockchain. Instead of a
 - **Anti-Bot PoW**: Client-side proof-of-work to increase cost for mass submissions
 - **Verifiable Results**: `allocation.json` snapshot for audit
 
-### Why GhostPass?
+### Why Tickasting?
 
 Traditional ticketing systems suffer from:
 - **Queue manipulation**: Servers can (intentionally or not) favor certain users
 - **Bot advantage**: Fast networks and automation beat regular users
 - **No verification**: Users have no way to verify their position was fair
 
-GhostPass solves this by:
+Tickasting solves this by:
 - Using blockchain acceptance order instead of server timestamps
 - Requiring proof-of-work to increase bot costs
 - Publishing all ordering rules and data for anyone to verify
@@ -39,8 +39,8 @@ GhostPass solves this by:
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/your-org/ghostpass.git
-cd ghostpass
+git clone https://github.com/your-org/tickasting.git
+cd tickasting
 pnpm install
 ```
 
@@ -89,7 +89,7 @@ curl http://localhost:4002/health
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://ghostpass:ghostpass@localhost:5433/ghostpass` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://tickasting:tickasting@localhost:5433/tickasting` |
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
 | `API_PORT` | API server port | `4001` |
 | `INDEXER_PORT` | Indexer service port | `4002` |
@@ -147,7 +147,7 @@ All rankings follow this deterministic order:
 
 To verify independently:
 1. Get all purchase transactions from the treasury address
-2. Filter by valid payload (magic: `GPS1`, correct saleId)
+2. Filter by valid payload (magic: `TKS1`, correct saleId)
 3. Get acceptance data for each transaction
 4. Sort by blueScore, then txid
 5. Compare with `allocation.json` winners list
@@ -156,7 +156,7 @@ To verify independently:
 
 Each payload contains a PoW nonce. Verify with:
 ```
-message = "GhostPassPoW|v1|{saleId}|{buyerAddrHash}|{nonce}"
+message = "TickastingPoW|v1|{saleId}|{buyerAddrHash}|{nonce}"
 hash = SHA256(message)
 leadingZeroBits(hash) >= difficulty
 ```
@@ -164,49 +164,54 @@ leadingZeroBits(hash) >= difficulty
 ## Project Structure
 
 ```
-ghostpass/
+tickasting/
 ├── apps/
-│   ├── web/        # Next.js frontend
+│   ├── web/           # Next.js frontend (Vercel)
 │   │   └── app/
 │   │       └── sales/[saleId]/
-│   │           ├── page.tsx       # Purchase page
-│   │           ├── live/page.tsx  # Live dashboard
+│   │           ├── page.tsx         # Purchase page
+│   │           ├── live/page.tsx    # Live dashboard
 │   │           └── results/page.tsx
-│   ├── api/        # Fastify API server
+│   ├── api/           # Fastify API server (Railway)
 │   │   └── src/
 │   │       └── routes/
-│   └── indexer/    # Transaction indexer & ordering
-│       └── src/
-│           ├── scanner.ts          # Tx detection
-│           ├── validator.ts        # Payload/PoW validation
-│           ├── acceptance-tracker.ts
-│           └── ordering.ts         # Rank computation
+│   ├── ponder/        # Ponder indexer (Railway, target)
+│   └── indexer/       # Legacy indexer (deprecated)
+├── contracts/         # Solidity ERC-721 (Sepolia)
 ├── packages/
-│   └── shared/     # Shared utilities
+│   └── shared/        # Shared utilities
 │       └── src/
-│           ├── payload.ts  # Encode/decode
-│           ├── pow.ts      # PoW solve/verify
-│           └── kaspa/      # Adapter interface
+│           ├── payload.ts    # Encode/decode
+│           ├── pow.ts        # PoW solve/verify
+│           ├── merkle.ts     # Merkle tree
+│           └── kaspa/        # Adapter interface
 ├── infra/
 │   └── docker-compose.yml
-├── PROJECT.md      # Full specification
-└── TICKET.md       # Implementation tickets
+├── docs/
+│   ├── architecture.md   # Architecture decision record
+│   ├── contract-spec.md  # Contract specification
+│   └── audit.md          # Verification guide
+├── PROJECT.md         # Full specification
+└── TICKET.md          # Implementation tickets
 ```
 
 ## Architecture
 
+> Indexing is transitioning from `apps/indexer` to Ponder (`apps/ponder`).
+> See [docs/architecture.md](docs/architecture.md) for the full decision record.
+
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
 │   Web App   │────▶│  API Server │────▶│    Database     │
-│  (Next.js)  │     │  (Fastify)  │     │  (PostgreSQL)   │
+│  (Vercel)   │     │  (Railway)  │     │  (Railway PG)   │
 └─────────────┘     └─────────────┘     └─────────────────┘
-       │                   │
-       │                   │
-       ▼                   ▼
-┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│   Wallet    │     │   Indexer   │────▶│  Kaspa Network  │
-│  (KasWare)  │────▶│   Engine    │     │  (via Kas.fyi)  │
-└─────────────┘     └─────────────┘     └─────────────────┘
+       │                   ▲                     ▲
+       │                   │                     │
+       ▼                   │               ┌─────┘
+┌─────────────┐     ┌─────────────┐     ┌──────────────────┐
+│   Wallet    │     │   Ponder    │────▶│  Kaspa Network   │
+│  (KasWare)  │────▶│  (Railway)  │────▶│  EVM (Sepolia)   │
+└─────────────┘     └─────────────┘     └──────────────────┘
 ```
 
 ## API Endpoints
@@ -233,8 +238,8 @@ ghostpass/
 pnpm test
 
 # Run specific package tests
-pnpm --filter @ghostpass/shared test
-pnpm --filter @ghostpass/indexer test
+pnpm --filter @tickasting/shared test
+pnpm --filter @tickasting/indexer test
 ```
 
 ## Tech Stack

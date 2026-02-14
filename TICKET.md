@@ -690,7 +690,7 @@
 - 팀 내 “indexing은 Ponder로 간다” 결정이 문서로 고정됨
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1063,6 +1063,19 @@
   - getTicketTypes(), getClaimStatus() API 함수 추가
 
 - **GP-026** (2026-02-14): 배포/운영 문서 업데이트 완료
+  - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
+  - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
+  - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가
+  - LOCAL.md에 Hardhat 로컬 테스트 절차 + Sepolia dry-run 절차 추가
+  - LOCAL.md에 ABI 동기화 절차 추가
+
+- **GP-027** (2026-02-14): 아키텍처 확정 완료
+  - Target: FE=Vercel, API=Railway, Indexing=Ponder(Railway), DB=Railway Postgres
+  - `apps/indexer` deprecated, `apps/ponder` target으로 공식화
+  - 데이터 소스 책임 분리: Ponder(체인 인덱싱) / API(도메인 로직)
+  - docs/architecture.md 신규 작성 (ADR)
+  - PROJECT.md 섹션 6 업데이트 (런타임 토폴로지 테이블, 책임 분리, 다이어그램)
+  - DEPLOY.md/LOCAL.md/README.md 일관 반영
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

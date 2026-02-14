@@ -86,19 +86,31 @@ API_HOST=0.0.0.0 API_PORT=${PORT:-4001} pnpm --filter @tickasting/api start
 
 ## 2.4 Ponder 서비스 명령어 (target)
 
-> 정확한 빌드/시작 명령은 GP-028에서 확정한다. 아래는 예상 구조다.
-
-- Build Command:
-
-```bash
-pnpm --filter @tickasting/ponder build
-```
+- Build Command: 별도 빌드 불필요 (Ponder가 내부적으로 esbuild 사용)
 
 - Start Command:
 
 ```bash
 pnpm --filter @tickasting/ponder start
 ```
+
+- Dev Command (로컬):
+
+```bash
+pnpm --filter @tickasting/ponder dev
+```
+
+## 2.4.1 Ponder 환경변수
+
+필수:
+
+- `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+- `PONDER_RPC_URL_11155111=https://sepolia.infura.io/v3/<key>`
+- `TICKASTING_CONTRACT_ADDRESS=0x<deployed-address>`
+
+권장:
+
+- `TICKASTING_START_BLOCK=<deploy-block-number>` (초기 sync 속도 향상)
 
 ## 2.4.1 Indexer 서비스 명령어 (deprecated)
 

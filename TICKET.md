@@ -711,7 +711,7 @@
 - CI에서 ponder build/typecheck가 통과
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1076,6 +1076,18 @@
   - docs/architecture.md 신규 작성 (ADR)
   - PROJECT.md 섹션 6 업데이트 (런타임 토폴로지 테이블, 책임 분리, 다이어그램)
   - DEPLOY.md/LOCAL.md/README.md 일관 반영
+
+- **GP-028** (2026-02-14): Ponder 앱 스캐폴딩 + 워크스페이스 편입 완료
+  - apps/ponder 생성 (ponder 0.16.3 + viem + hono)
+  - ponder.config.ts: Sepolia chain + TickastingSale contract 설정
+  - ponder.schema.ts: sales_onchain, ticket_types_onchain, claims_onchain, token_ownership
+  - src/index.ts: 5개 이벤트 핸들러 (SaleCreated, TicketTypeDefined, ClaimOpened, TicketClaimed, SaleFinalized) + Transfer
+  - src/api/index.ts: GraphQL + REST endpoints (/sales/:id, /sales/:id/claims, /sales/:id/ticket-types)
+  - abis/TickastingSaleAbi.ts: ABI as const for type-safe indexing
+  - ponder-env.d.ts, tsconfig.json, .env.example
+  - pnpm-workspace에 자동 편입 (apps/* 패턴)
+  - DEPLOY.md에 Ponder 서비스 명령어/환경변수 확정
+  - typecheck 통과
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가
   - DEPLOY.md에 컨트랙트 포함 데모 체크리스트 추가

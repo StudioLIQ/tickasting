@@ -5,9 +5,11 @@ import {
   getSale,
   getAllocation,
   getMerkleProof,
+  getTicketTypes,
   type Sale,
   type AllocationSnapshot,
   type MerkleProofResponse,
+  type TicketType,
 } from '@/lib/api'
 
 interface PageProps {
@@ -19,6 +21,7 @@ export default function ResultsPage({ params }: PageProps) {
 
   const [sale, setSale] = useState<Sale | null>(null)
   const [allocation, setAllocation] = useState<AllocationSnapshot | null>(null)
+  const [ticketTypes, setTicketTypes] = useState<(TicketType & { minted: number; remaining: number })[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTxid, setSearchTxid] = useState('')
@@ -34,12 +37,14 @@ export default function ResultsPage({ params }: PageProps) {
   useEffect(() => {
     async function loadData() {
       try {
-        const [saleData, allocationData] = await Promise.all([
+        const [saleData, allocationData, ttData] = await Promise.all([
           getSale(saleId),
           getAllocation(saleId),
+          getTicketTypes(saleId).catch(() => ({ ticketTypes: [] })),
         ])
         setSale(saleData)
         setAllocation(allocationData)
+        setTicketTypes(ttData.ticketTypes)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -130,7 +135,7 @@ export default function ResultsPage({ params }: PageProps) {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold">
-            <span className="text-kaspa-primary">Ghost</span>Pass Results
+            <span className="text-kaspa-primary">Tick</span>asting Results
           </h1>
           {sale?.eventTitle && (
             <h2 className="text-xl text-gray-300 mt-1">{sale.eventTitle}</h2>
@@ -164,6 +169,44 @@ export default function ResultsPage({ params }: PageProps) {
             </div>
           </div>
         </div>
+
+        {/* Ticket Types Stats */}
+        {ticketTypes.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold mb-4">Ticket Type Breakdown</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {ticketTypes.map((tt) => (
+                <div key={tt.id} className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-white">{tt.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-600 text-gray-300">
+                      {tt.code}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-400 mb-3">
+                    {(Number(BigInt(tt.priceSompi)) / 100_000_000).toFixed(2)} KAS
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Supply</span>
+                    <span className="text-white">{tt.supply}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Claimed</span>
+                    <span className={tt.remaining === 0 ? 'text-red-400' : 'text-green-400'}>
+                      {tt.minted ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Remaining</span>
+                    <span className={tt.remaining === 0 ? 'text-red-400 font-bold' : 'text-white'}>
+                      {tt.remaining === 0 ? 'SOLD OUT' : tt.remaining}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         <div className="bg-gray-800 rounded-lg p-6 mb-8">

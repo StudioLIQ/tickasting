@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useSaleWebSocket } from '@/hooks/useSaleWebSocket'
-import { getSale, type Sale } from '@/lib/api'
+import { getSale, getTicketTypes, type Sale, type TicketType } from '@/lib/api'
 
 interface PageProps {
   params: Promise<{ saleId: string }>
@@ -12,24 +12,29 @@ export default function LiveDashboard({ params }: PageProps) {
   const { saleId } = use(params)
 
   const [sale, setSale] = useState<Sale | null>(null)
+  const [ticketTypes, setTicketTypes] = useState<(TicketType & { minted: number; remaining: number })[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const ws = useSaleWebSocket(saleId)
 
-  // Load sale data
+  // Load sale data + ticket types
   useEffect(() => {
-    async function loadSale() {
+    async function loadData() {
       try {
-        const data = await getSale(saleId)
-        setSale(data)
+        const [saleData, ttData] = await Promise.all([
+          getSale(saleId),
+          getTicketTypes(saleId).catch(() => ({ ticketTypes: [] })),
+        ])
+        setSale(saleData)
+        setTicketTypes(ttData.ticketTypes)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load sale')
       } finally {
         setLoading(false)
       }
     }
-    loadSale()
+    loadData()
   }, [saleId])
 
   if (loading) {
@@ -60,7 +65,7 @@ export default function LiveDashboard({ params }: PageProps) {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">
-              <span className="text-kaspa-primary">Ghost</span>Pass Live
+              <span className="text-kaspa-primary">Tick</span>asting Live
             </h1>
             {sale?.eventTitle && (
               <h2 className="text-xl text-gray-300 mt-1">{sale.eventTitle}</h2>
@@ -121,6 +126,41 @@ export default function LiveDashboard({ params }: PageProps) {
             <span>{remaining} remaining</span>
           </div>
         </div>
+
+        {/* Ticket Types Breakdown */}
+        {ticketTypes.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold mb-4">Ticket Types</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {ticketTypes.map((tt) => {
+                const pct = tt.supply > 0 ? ((tt.minted ?? 0) / tt.supply) * 100 : 0
+                return (
+                  <div key={tt.id} className="bg-gray-700/50 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium text-white">{tt.name}</span>
+                      <span className="text-xs text-gray-400">{tt.code}</span>
+                    </div>
+                    <div className="text-sm text-gray-400 mb-2">
+                      {(Number(BigInt(tt.priceSompi)) / 100_000_000).toFixed(2)} KAS
+                    </div>
+                    <div className="w-full bg-gray-600 rounded-full h-2 mb-1">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          tt.remaining === 0 ? 'bg-red-500' : 'bg-kaspa-primary'
+                        }`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>{tt.minted ?? 0} claimed</span>
+                      <span>{tt.remaining ?? tt.supply} left</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Status Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

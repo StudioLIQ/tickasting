@@ -780,7 +780,7 @@
 - 실패 케이스(revert, already claimed, sold out) UX가 명확함
 
 #### Status
-- [ ] Todo
+- [x] Done (2026-02-14)
 
 ---
 
@@ -1101,6 +1101,13 @@
   - GET /v1/sales/:saleId/claims/consistency: Ponder 데이터 우선 사용 + claimSource 표시
   - /health 엔드포인트: ponder 상태 + usePonderData 필드 추가
   - Ponder 테이블 미존재 시 legacy 자동 fallback
+  - typecheck 통과
+
+- **GP-031** (2026-02-14): FE 업데이트 — 멀티 티켓 타입 + 온체인 Claim UX
+  - live 페이지에 Ticket Types 섹션 추가 (타입별 가격/supply/claimed/remaining 바)
+  - results 페이지에 Ticket Type Breakdown 섹션 추가 (타입별 supply/claimed/remaining)
+  - 브랜딩 수정: GhostPass → Tickasting (live/results 페이지)
+  - getTicketTypes API 호출 추가 (live/results 양쪽)
   - typecheck 통과
   - DEPLOY.md에 컨트랙트 배포 절차 추가 (Sepolia compile/test/deploy/verify)
   - DEPLOY.md에 컨트랙트 초기화 절차 + API 주소 등록 절차 추가

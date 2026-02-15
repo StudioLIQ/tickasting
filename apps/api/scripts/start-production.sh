@@ -6,7 +6,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-API_DATABASE_SCHEMA="${API_DATABASE_SCHEMA:-${DATABASE_SCHEMA:-api}}"
+API_DATABASE_SCHEMA="${API_DATABASE_SCHEMA:-api}"
 export API_DATABASE_SCHEMA
 
 RESOLVED_DATABASE_URL="$(
@@ -17,7 +17,7 @@ export DATABASE_URL="$RESOLVED_DATABASE_URL"
 echo "[api] Using schema '${API_DATABASE_SCHEMA}'"
 
 # Prefer migration history, fallback to schema push for pre-existing DB states.
-prisma migrate deploy || prisma db push --skip-generate
+prisma migrate deploy || prisma db push --skip-generate --accept-data-loss
 
 AUTO_DEMO_SEED="${AUTO_DEMO_SEED:-true}"
 if [ "$AUTO_DEMO_SEED" = "true" ]; then
@@ -27,7 +27,7 @@ if [ "$AUTO_DEMO_SEED" = "true" ]; then
 
   if [ "$SALES_COUNT" = "0" ]; then
     echo "[api] No sales found. Running demo seed..."
-    pnpm --filter @tickasting/api db:seed || echo "[api] Demo seed failed; continuing startup."
+    pnpm --filter @tickasting/api db:seed
   else
     echo "[api] Existing sales detected: ${SALES_COUNT}. Skip demo seed."
   fi

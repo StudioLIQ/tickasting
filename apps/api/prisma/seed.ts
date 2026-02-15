@@ -9,6 +9,34 @@ const defaultTreasuryAddress =
 const claimContractAddress = process.env['TICKASTING_CONTRACT_ADDRESS'] || null
 const ticketSecret = process.env['TICKET_SECRET'] || 'dev-ticket-secret-change-in-prod'
 
+function resolveDatabaseSchema(): string {
+  const fromApiEnv = process.env['API_DATABASE_SCHEMA']?.trim()
+  if (fromApiEnv) return fromApiEnv
+
+  const fromGenericEnv = process.env['DATABASE_SCHEMA']?.trim()
+  if (fromGenericEnv) return fromGenericEnv
+
+  const databaseUrl = process.env['DATABASE_URL']
+  if (databaseUrl) {
+    try {
+      const parsed = new URL(databaseUrl)
+      const fromUrl = parsed.searchParams.get('schema')?.trim()
+      if (fromUrl) return fromUrl
+    } catch {
+      // Ignore malformed DATABASE_URL and fallback below.
+    }
+  }
+
+  return 'public'
+}
+
+function quoteIdentifier(input: string): string {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(input)) {
+    throw new Error(`Invalid SQL identifier: ${input}`)
+  }
+  return `"${input}"`
+}
+
 interface TicketTypeSeed {
   code: string
   name: string
@@ -347,12 +375,14 @@ const eventSeeds: EventSeed[] = [
 ]
 
 async function cleanupManagedSeedData() {
+  const schema = quoteIdentifier(resolveDatabaseSchema())
+
   const targetSalesQuery = `
-    SELECT id FROM "public"."sales"
+    SELECT id FROM ${schema}."sales"
     WHERE id LIKE 'seed-sale-%'
        OR id = 'demo-sale-001'
        OR event_id IN (
-         SELECT id FROM "public"."events"
+         SELECT id FROM ${schema}."events"
          WHERE id LIKE 'seed-event-%'
             OR organizer_id = 'demo-organizer'
             OR title ILIKE '%demo%'
@@ -360,35 +390,35 @@ async function cleanupManagedSeedData() {
   `
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."scans"
+    `DELETE FROM ${schema}."scans"
      WHERE ticket_id IN (
-       SELECT id FROM "public"."tickets"
+       SELECT id FROM ${schema}."tickets"
        WHERE sale_id IN (${targetSalesQuery})
      )`
   )
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."tickets"
+    `DELETE FROM ${schema}."tickets"
      WHERE sale_id IN (${targetSalesQuery})`
   )
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."purchase_attempts"
+    `DELETE FROM ${schema}."purchase_attempts"
      WHERE sale_id IN (${targetSalesQuery})`
   )
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."ticket_types"
+    `DELETE FROM ${schema}."ticket_types"
      WHERE sale_id IN (${targetSalesQuery})`
   )
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."sales"
+    `DELETE FROM ${schema}."sales"
      WHERE id IN (${targetSalesQuery})`
   )
 
   await prisma.$executeRawUnsafe(
-    `DELETE FROM "public"."events"
+    `DELETE FROM ${schema}."events"
      WHERE id LIKE 'seed-event-%'
         OR organizer_id = 'demo-organizer'
         OR title ILIKE '%demo%'`

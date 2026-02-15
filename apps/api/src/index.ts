@@ -1,7 +1,7 @@
 import { prisma } from './db.js'
 import { buildApiServer } from './app.js'
 
-const PORT = parseInt(process.env['API_PORT'] || '4001', 10)
+const PORT = parseInt(process.env['API_PORT'] || process.env['PORT'] || '4001', 10)
 const HOST = process.env['API_HOST'] || '0.0.0.0'
 
 async function main() {

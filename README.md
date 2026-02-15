@@ -74,6 +74,7 @@ In `.env`:
 DATABASE_URL=postgresql://tickasting:tickasting@localhost:5433/tickasting?schema=public
 API_HOST=0.0.0.0
 API_PORT=4001
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://tickasting.studioliq.com
 PURCHASE_MODE=evm
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
@@ -86,6 +87,7 @@ PAYMENT_CURRENCY=USDC
 PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
 PAYMENT_CHAIN=kasplex-testnet
 USE_PONDER_DATA=true
+DATABASE_SCHEMA=public
 ```
 
 Vercel production (`apps/web`) values:
@@ -251,7 +253,7 @@ curl -X POST http://localhost:4001/v1/sales/<saleId>/publish
 Commonly used variables:
 
 - `DATABASE_URL` Postgres DSN
-- `API_HOST`, `API_PORT` API listen config
+- `API_HOST`, `API_PORT` API listen config (`PORT` is also supported for container platforms)
 - `CORS_ORIGINS` comma-separated CORS allowlist for browser origins
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)

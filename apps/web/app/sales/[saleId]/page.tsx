@@ -10,7 +10,6 @@ interface PageProps {
 
 const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
 const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
-const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)
@@ -237,49 +236,25 @@ export default function SalePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Wallet Connection */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Wallet</h3>
-
-          {!wallet.isInstalled ? (
-            <div className="text-yellow-400">
-              EVM wallet not detected. Please install MetaMask from{' '}
-              <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">
-                metamask.io
-              </a>
-              {' '}or open this page in your wallet browser.
-            </div>
-          ) : !wallet.isConnected ? (
-            <button
-              onClick={wallet.connect}
-              disabled={wallet.loading}
-              className="bg-kaspa-primary hover:bg-kaspa-primary/80 px-4 py-2 rounded font-medium disabled:opacity-50"
-            >
-              {wallet.loading ? 'Connecting...' : 'Connect Wallet'}
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-sm">
-                <span className="text-gray-400">Address:</span>
-                <span className="ml-2 text-white font-mono text-xs">
-                  {wallet.address?.slice(0, 20)}...{wallet.address?.slice(-10)}
-                </span>
-              </div>
-              <div className="text-sm">
-                <span className="text-gray-400">Chain:</span>
-                <span className={`ml-2 ${wallet.chainId === KASPLEX_CHAIN_ID ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {wallet.chainId ?? 'unknown'} {wallet.chainId === KASPLEX_CHAIN_ID ? '(Kasplex)' : '(Switch required)'}
-                </span>
-              </div>
-              <button onClick={wallet.disconnect} className="text-sm text-gray-400 hover:text-white">
-                Disconnect
-              </button>
-              {wallet.error && <div className="text-sm text-red-400">{wallet.error}</div>}
+          <h3 className="text-lg font-semibold mb-2">Wallet</h3>
+          <p className="text-sm text-gray-300">
+            Wallet connection, network status, and KAS/{PAYMENT_SYMBOL} balances are managed in the top navigation bar.
+          </p>
+          {wallet.isConnected && wallet.address && (
+            <div className="mt-3 text-xs text-gray-400">
+              Active wallet: <span className="font-mono text-gray-200">{wallet.address}</span>
             </div>
           )}
         </div>
 
         {/* Purchase Section */}
+        {!wallet.isConnected && sale.status === 'live' && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 text-sm text-yellow-200">
+            Connect your wallet from the top navigation bar to purchase tickets.
+          </div>
+        )}
+
         {wallet.isConnected && sale.status === 'live' && !txid && (
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <h3 className="text-lg font-semibold mb-4">Purchase</h3>

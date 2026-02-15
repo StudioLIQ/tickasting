@@ -7,6 +7,10 @@ interface EvmProvider {
   on?: (event: string, handler: (data: unknown) => void) => void
   removeListener?: (event: string, handler: (data: unknown) => void) => void
   isMetaMask?: boolean
+  isRabby?: boolean
+  isCoinbaseWallet?: boolean
+  isTrust?: boolean
+  isBraveWallet?: boolean
   providers?: EvmProvider[]
 }
 
@@ -24,6 +28,7 @@ const KASPLEX_CHAIN_ID_HEX = `0x${KASPLEX_CHAIN_ID.toString(16)}`
 const KASPLEX_RPC_URL = 'https://rpc.kasplextest.xyz'
 const KASPLEX_EXPLORER_URL =
   process.env['NEXT_PUBLIC_EVM_EXPLORER_URL'] || 'https://explorer.testnet.kasplextest.xyz'
+const WALLET_SYNC_EVENT = 'tickasting:wallet-sync'
 
 interface EvmRequestError extends Error {
   code?: number
@@ -38,6 +43,37 @@ function encodeErc20Transfer(to: string, amount: bigint): string {
   const toArg = padHex(to.toLowerCase().replace(/^0x/, ''))
   const valueArg = padHex(amount.toString(16))
   return `0x${methodId}${toArg}${valueArg}`
+}
+
+function encodeErc20BalanceOf(address: string): string {
+  const methodId = '70a08231'
+  const ownerArg = padHex(address.toLowerCase().replace(/^0x/, ''))
+  return `0x${methodId}${ownerArg}`
+}
+
+function parseHexToBigInt(raw: unknown): bigint {
+  if (typeof raw !== 'string') return 0n
+  if (!raw.startsWith('0x')) return 0n
+  if (raw === '0x') return 0n
+  try {
+    return BigInt(raw)
+  } catch {
+    return 0n
+  }
+}
+
+function detectWalletLabel(provider: EvmProvider): string {
+  if (provider.isMetaMask) return 'MetaMask'
+  if (provider.isRabby) return 'Rabby'
+  if (provider.isCoinbaseWallet) return 'Coinbase Wallet'
+  if (provider.isTrust) return 'Trust Wallet'
+  if (provider.isBraveWallet) return 'Brave Wallet'
+  return 'Injected EVM Wallet'
+}
+
+function emitWalletSyncEvent() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(WALLET_SYNC_EVENT))
 }
 
 function getInjectedProvider(): EvmProvider | null {
@@ -57,10 +93,16 @@ export interface UseEvmWalletResult {
   isConnected: boolean
   address: string | null
   chainId: number | null
+  walletLabel: string | null
+  kasBalanceWei: bigint | null
+  usdcBalanceRaw: bigint | null
+  balancesLoading: boolean
+  balanceError: string | null
   loading: boolean
   error: string | null
   connect: () => Promise<void>
   disconnect: () => void
+  refreshBalances: () => Promise<void>
   ensureKasplexChain: () => Promise<void>
   sendUsdcTransfer: (toAddress: string, amount: bigint) => Promise<string>
 }
@@ -70,6 +112,11 @@ export function useEvmWallet(): UseEvmWalletResult {
   const [isConnected, setIsConnected] = useState(false)
   const [address, setAddress] = useState<string | null>(null)
   const [chainId, setChainId] = useState<number | null>(null)
+  const [walletLabel, setWalletLabel] = useState<string | null>(null)
+  const [kasBalanceWei, setKasBalanceWei] = useState<bigint | null>(null)
+  const [usdcBalanceRaw, setUsdcBalanceRaw] = useState<bigint | null>(null)
+  const [balancesLoading, setBalancesLoading] = useState(false)
+  const [balanceError, setBalanceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -92,7 +139,42 @@ export function useEvmWallet(): UseEvmWalletResult {
     setAddress(accounts[0]?.toLowerCase() || null)
     setIsConnected(accounts.length > 0)
     setChainId(Number.isFinite(nextChainId) ? nextChainId : null)
+    setWalletLabel(detectWalletLabel(provider))
   }, [])
+
+  const refreshBalances = useCallback(async () => {
+    const provider = getInjectedProvider()
+    if (!provider || !address) {
+      setKasBalanceWei(null)
+      setUsdcBalanceRaw(null)
+      setBalanceError(null)
+      return
+    }
+
+    setBalancesLoading(true)
+    setBalanceError(null)
+    try {
+      const [kasRaw, usdcRaw] = await Promise.all([
+        provider.request({
+          method: 'eth_getBalance',
+          params: [address, 'latest'],
+        }),
+        provider.request({
+          method: 'eth_call',
+          params: [{ to: PAYMENT_TOKEN_ADDRESS, data: encodeErc20BalanceOf(address) }, 'latest'],
+        }),
+      ])
+
+      setKasBalanceWei(parseHexToBigInt(kasRaw))
+      setUsdcBalanceRaw(parseHexToBigInt(usdcRaw))
+    } catch (err) {
+      setKasBalanceWei(null)
+      setUsdcBalanceRaw(null)
+      setBalanceError(err instanceof Error ? err.message : 'Failed to load balances')
+    } finally {
+      setBalancesLoading(false)
+    }
+  }, [address])
 
   const connect = useCallback(async () => {
     const provider = getInjectedProvider()
@@ -129,6 +211,7 @@ export function useEvmWallet(): UseEvmWalletResult {
         })
       })
       await syncWalletState()
+      emitWalletSyncEvent()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect wallet')
     } finally {
@@ -139,6 +222,10 @@ export function useEvmWallet(): UseEvmWalletResult {
   const disconnect = useCallback(() => {
     setIsConnected(false)
     setAddress(null)
+    setWalletLabel(null)
+    setKasBalanceWei(null)
+    setUsdcBalanceRaw(null)
+    setBalanceError(null)
   }, [])
 
   const ensureKasplexChain = useCallback(async () => {
@@ -215,29 +302,57 @@ export function useEvmWallet(): UseEvmWalletResult {
       const list = accounts as string[]
       setAddress(list[0]?.toLowerCase() || null)
       setIsConnected(list.length > 0)
+      emitWalletSyncEvent()
     }
     const handleChainChanged = (chainIdHex: unknown) => {
       const parsed = parseInt(chainIdHex as string, 16)
       setChainId(Number.isFinite(parsed) ? parsed : null)
+      emitWalletSyncEvent()
+    }
+    const handleWalletSync = () => {
+      void syncWalletState()
     }
 
     provider.on?.('accountsChanged', handleAccountsChanged)
     provider.on?.('chainChanged', handleChainChanged)
+    window.addEventListener(WALLET_SYNC_EVENT, handleWalletSync)
     return () => {
       provider.removeListener?.('accountsChanged', handleAccountsChanged)
       provider.removeListener?.('chainChanged', handleChainChanged)
+      window.removeEventListener(WALLET_SYNC_EVENT, handleWalletSync)
     }
   }, [syncWalletState])
+
+  useEffect(() => {
+    if (!isConnected || !address) {
+      setKasBalanceWei(null)
+      setUsdcBalanceRaw(null)
+      setBalanceError(null)
+      return
+    }
+
+    void refreshBalances()
+    const interval = setInterval(() => {
+      void refreshBalances()
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [isConnected, address, chainId, refreshBalances])
 
   return {
     isInstalled,
     isConnected,
     address,
     chainId,
+    walletLabel,
+    kasBalanceWei,
+    usdcBalanceRaw,
+    balancesLoading,
+    balanceError,
     loading,
     error,
     connect,
     disconnect,
+    refreshBalances,
     ensureKasplexChain,
     sendUsdcTransfer,
   }

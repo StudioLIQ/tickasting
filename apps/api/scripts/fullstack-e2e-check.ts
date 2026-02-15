@@ -166,6 +166,15 @@ async function insertPaymentTransferRow(data: {
   )
 }
 
+async function ensureLiveQueryTable() {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "public"."live_query_tables" (
+      "table_name" text PRIMARY KEY,
+      "updated_at" timestamptz NOT NULL DEFAULT now()
+    )`
+  )
+}
+
 async function main() {
   const created: {
     eventId?: string
@@ -194,6 +203,7 @@ async function main() {
     })
 
     await prisma.$connect()
+    await ensureLiveQueryTable()
 
     const uniqueTag = `${Date.now()}-${randomBytes(3).toString('hex')}`
     const nowSeconds = nowUnixSecondsString()

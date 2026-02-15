@@ -10,6 +10,7 @@ interface PageProps {
 
 const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
 const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
+const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)
@@ -23,6 +24,7 @@ export default function SalePage({ params }: PageProps) {
   const { saleId } = use(params)
 
   const wallet = useEvmWallet()
+  const onKasplex = wallet.chainId === KASPLEX_CHAIN_ID
   const [sale, setSale] = useState<Sale | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -237,9 +239,35 @@ export default function SalePage({ params }: PageProps) {
         </div>
 
         {/* Purchase Section */}
+        {sale.status !== 'live' && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6 text-sm text-gray-300">
+            <div className="font-semibold text-white">Purchasing is not available.</div>
+            <div className="mt-1 text-gray-400">
+              This sale is currently <span className="text-gray-200">{sale.status}</span>. Purchases open when the sale
+              is live.
+            </div>
+          </div>
+        )}
+
         {!wallet.isConnected && sale.status === 'live' && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 text-sm text-yellow-200">
             Connect your wallet from the top navigation bar to purchase tickets.
+          </div>
+        )}
+
+        {wallet.isConnected && sale.status === 'live' && !onKasplex && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 text-sm text-yellow-200">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>Switch to Kasplex testnet to continue.</span>
+              <button
+                onClick={() => void wallet.ensureKasplexChain().catch((err) => {
+                  setError(err instanceof Error ? err.message : 'Failed to switch network')
+                })}
+                className="rounded-md border border-yellow-400/60 px-3 py-1 text-xs text-yellow-100 hover:bg-yellow-500/10"
+              >
+                Switch Network
+              </button>
+            </div>
           </div>
         )}
 

@@ -155,19 +155,35 @@ export function useEvmWallet(): UseEvmWalletResult {
     setBalancesLoading(true)
     setBalanceError(null)
     try {
-      const [kasRaw, usdcRaw] = await Promise.all([
-        provider.request({
+      let nextKas: bigint | null = null
+      let nextUsdc: bigint | null = null
+      const errors: string[] = []
+
+      try {
+        const kasRaw = await provider.request({
           method: 'eth_getBalance',
           params: [address, 'latest'],
-        }),
-        provider.request({
+        })
+        nextKas = parseHexToBigInt(kasRaw)
+      } catch (err) {
+        nextKas = null
+        errors.push(err instanceof Error ? err.message : 'Failed to load KAS balance')
+      }
+
+      try {
+        const usdcRaw = await provider.request({
           method: 'eth_call',
           params: [{ to: PAYMENT_TOKEN_ADDRESS, data: encodeErc20BalanceOf(address) }, 'latest'],
-        }),
-      ])
+        })
+        nextUsdc = parseHexToBigInt(usdcRaw)
+      } catch (err) {
+        nextUsdc = null
+        errors.push(err instanceof Error ? err.message : 'Failed to load USDC balance')
+      }
 
-      setKasBalanceWei(parseHexToBigInt(kasRaw))
-      setUsdcBalanceRaw(parseHexToBigInt(usdcRaw))
+      setKasBalanceWei(nextKas)
+      setUsdcBalanceRaw(nextUsdc)
+      setBalanceError(errors.length > 0 ? errors.join(' / ') : null)
     } catch (err) {
       setKasBalanceWei(null)
       setUsdcBalanceRaw(null)

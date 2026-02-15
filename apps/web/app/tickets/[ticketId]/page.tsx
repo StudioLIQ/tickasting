@@ -127,20 +127,12 @@ export default function TicketDetailPage({ params }: PageProps) {
               <h1 className="text-2xl font-bold text-white">{metadata.name}</h1>
               <p className="text-sm text-gray-400">Ticket ID: {ticket.id}</p>
             </div>
-            <div className="flex gap-2">
-              <Link
-                href="/my-tickets"
-                className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-gray-500"
-              >
-                My Tickets
-              </Link>
-              <Link
-                href={`/sales/${ticket.saleId}`}
-                className="rounded-md bg-kaspa-primary px-3 py-2 text-sm font-medium text-black hover:bg-kaspa-primary/90"
-              >
-                Open Sale
-              </Link>
-            </div>
+            <Link
+              href={`/sales/${ticket.saleId}`}
+              className="rounded-md bg-kaspa-primary px-3 py-2 text-sm font-medium text-black hover:bg-kaspa-primary/90"
+            >
+              Open Sale
+            </Link>
           </div>
         </header>
 

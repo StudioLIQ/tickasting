@@ -89,6 +89,11 @@ Railway 설정:
 
 ### 3-3. Variables
 
+빠른 적용(권장):
+
+- `deploy/env/railway-api.env` 파일 내용을 Railway `Variables`의 **Raw Editor**에 한 번에 붙여넣기
+- `DATABASE_URL`는 Railway Postgres reference 변수로 설정 권장 (`${{Postgres.DATABASE_URL}}`)
+
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
@@ -139,6 +144,11 @@ Railway 설정:
 
 ### 4-3. Variables
 
+빠른 적용(권장):
+
+- `deploy/env/railway-ponder.env` 파일 내용을 Railway `Variables`의 **Raw Editor**에 한 번에 붙여넣기
+- `DATABASE_URL`는 Railway Postgres reference 변수로 설정 권장 (`${{Postgres.DATABASE_URL}}`)
+
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
@@ -182,6 +192,11 @@ pnpm --filter @tickasting/api db:seed
 4. 배포 URL 확인: `https://tickasting.studioliq.com`
 
 ### 6-2. Env 설정
+
+빠른 적용(권장):
+
+- `deploy/env/vercel-web.env` 파일 내용을 Vercel `Settings -> Environment Variables`에 한 번에 붙여넣기
+- `Production/Preview/Development` 타겟을 원하는 범위로 지정
 
 필수:
 

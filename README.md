@@ -266,6 +266,7 @@ Commonly used variables:
 - `PAYMENT_CURRENCY`, `PAYMENT_TOKEN_ADDRESS`, `PAYMENT_CHAIN` payment config (USDC on Kasplex testnet)
 
 See `.env.example` and the Quick Start section in this README for concrete setups.
+Deployment bulk env templates: `deploy/env/vercel-web.env`, `deploy/env/railway-api.env`, `deploy/env/railway-ponder.env`.
 
 ## Testing
 

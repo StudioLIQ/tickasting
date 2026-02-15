@@ -133,6 +133,7 @@ pnpm env:sync:railway
 - `PONDER_SCHEMA=public`
 - `PONDER_RPC_URL_167012=https://rpc.kasplextest.xyz`
 - `CONTRACT_RPC_URL=https://rpc.kasplextest.xyz`
+- `DATABASE_SCHEMA`는 API에서 사용하지 않음 (Ponder 전용 변수)
 
 권장:
 

@@ -183,6 +183,16 @@ function parseHexToBigInt(raw: unknown): bigint {
   }
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message.trim().length > 0) return err.message
+  if (typeof err === 'string' && err.trim().length > 0) return err
+  if (err && typeof err === 'object' && 'message' in err) {
+    const maybe = (err as { message?: unknown }).message
+    if (typeof maybe === 'string' && maybe.trim().length > 0) return maybe
+  }
+  return fallback
+}
+
 function detectWalletLabel(provider: EvmProvider): string {
   if (provider.isMetaMask) return 'MetaMask'
   if (provider.isRabby) return 'Rabby'
@@ -440,22 +450,52 @@ export function useEvmWallet(): UseEvmWalletResult {
       const provider = getInjectedProvider()
       if (!provider) throw new Error('EVM wallet is required')
       if (!address) throw new Error('Wallet not connected')
+      if (amount <= 0n) throw new Error('Amount must be positive')
       if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) {
         throw new Error('Invalid EVM treasury address')
       }
       await ensureKasplexChain()
 
+      const [kasRaw, usdcRaw] = await Promise.all([
+        provider.request({
+          method: 'eth_getBalance',
+          params: [address, 'latest'],
+        }),
+        provider.request({
+          method: 'eth_call',
+          params: [{ to: PAYMENT_TOKEN_ADDRESS, data: encodeErc20BalanceOf(address) }, 'latest'],
+        }),
+      ])
+
+      const kasBalance = parseHexToBigInt(kasRaw)
+      const usdcBalance = parseHexToBigInt(usdcRaw)
+      if (kasBalance <= 0n) {
+        throw new Error('Insufficient KAS for gas fees')
+      }
+      if (usdcBalance < amount) {
+        throw new Error('Insufficient USDC balance')
+      }
+
       const data = encodeErc20Transfer(toAddress, amount)
+      const txRequest = {
+        from: address,
+        to: PAYMENT_TOKEN_ADDRESS,
+        value: '0x0',
+        data,
+      }
+
+      try {
+        await provider.request({
+          method: 'eth_estimateGas',
+          params: [txRequest],
+        })
+      } catch (err) {
+        throw new Error(`Transfer precheck failed: ${getErrorMessage(err, 'execution reverted')}`)
+      }
+
       const txHash = (await provider.request({
         method: 'eth_sendTransaction',
-        params: [
-          {
-            from: address,
-            to: PAYMENT_TOKEN_ADDRESS,
-            value: '0x0',
-            data,
-          },
-        ],
+        params: [txRequest],
       })) as string
 
       return txHash.toLowerCase()
@@ -483,23 +523,40 @@ export function useEvmWallet(): UseEvmWalletResult {
 
       await ensureKasplexChain()
 
+      const kasRaw = await provider.request({
+        method: 'eth_getBalance',
+        params: [address, 'latest'],
+      })
+      const kasBalance = parseHexToBigInt(kasRaw)
+      if (kasBalance <= 0n) {
+        throw new Error('Insufficient KAS for gas fees')
+      }
+
       const data = encodeClaimTicket(
         params.ticketTypeCode,
         params.kaspaTxid,
         params.finalRank,
         params.merkleProof
       )
+      const txRequest = {
+        from: address,
+        to: params.contractAddress,
+        value: '0x0',
+        data,
+      }
+
+      try {
+        await provider.request({
+          method: 'eth_estimateGas',
+          params: [txRequest],
+        })
+      } catch (err) {
+        throw new Error(`Claim precheck failed: ${getErrorMessage(err, 'execution reverted')}`)
+      }
 
       const txHash = (await provider.request({
         method: 'eth_sendTransaction',
-        params: [
-          {
-            from: address,
-            to: params.contractAddress,
-            value: '0x0',
-            data,
-          },
-        ],
+        params: [txRequest],
       })) as string
 
       const normalizedTxHash = txHash.toLowerCase()

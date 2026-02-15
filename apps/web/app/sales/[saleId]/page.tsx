@@ -17,7 +17,6 @@ import {
   PUBLIC_KASPLEX_CHAIN_ID,
   PUBLIC_PAYMENT_DECIMALS,
   PUBLIC_PAYMENT_SYMBOL,
-  PUBLIC_TICKASTING_CONTRACT_ADDRESS,
 } from '@/lib/public-runtime'
 
 interface PageProps {
@@ -27,7 +26,14 @@ interface PageProps {
 const PAYMENT_SYMBOL = PUBLIC_PAYMENT_SYMBOL
 const PAYMENT_DECIMALS = PUBLIC_PAYMENT_DECIMALS
 const KASPLEX_CHAIN_ID = PUBLIC_KASPLEX_CHAIN_ID
-const CLAIM_CONTRACT_ADDRESS_FALLBACK = PUBLIC_TICKASTING_CONTRACT_ADDRESS
+
+function shouldRetryAutoClaim(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('merkle proof is not ready yet') ||
+    (normalized.includes('claim precheck failed') && normalized.includes('claim not open'))
+  )
+}
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)
@@ -79,6 +85,8 @@ export default function SalePage({ params }: PageProps) {
   const [claimedTicketId, setClaimedTicketId] = useState<string | null>(null)
   const [ticketLookupPending, setTicketLookupPending] = useState(false)
   const autoClaimAttemptedTxRef = useRef<string | null>(null)
+  const autoClaimRetryTimerRef = useRef<number | null>(null)
+  const [autoClaimRetryNonce, setAutoClaimRetryNonce] = useState(0)
 
   // Load sale data
   useEffect(() => {
@@ -119,6 +127,11 @@ export default function SalePage({ params }: PageProps) {
 
   useEffect(() => {
     autoClaimAttemptedTxRef.current = null
+    if (autoClaimRetryTimerRef.current) {
+      window.clearTimeout(autoClaimRetryTimerRef.current)
+      autoClaimRetryTimerRef.current = null
+    }
+    setAutoClaimRetryNonce(0)
     setClaiming(false)
     setClaimError(null)
     setClaimTxHash(null)
@@ -126,6 +139,14 @@ export default function SalePage({ params }: PageProps) {
     setClaimedTicketId(null)
     setTicketLookupPending(false)
   }, [txid])
+
+  useEffect(() => {
+    return () => {
+      if (autoClaimRetryTimerRef.current) {
+        window.clearTimeout(autoClaimRetryTimerRef.current)
+      }
+    }
+  }, [])
 
   // Handle purchase
   const handlePurchase = useCallback(async () => {
@@ -170,11 +191,15 @@ export default function SalePage({ params }: PageProps) {
       if (!sale || !txid || !wallet.address) return
       if (!myStatus?.isWinner || !myStatus.finalRank) return
 
-      const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK
-      if (!claimContractAddress) {
-        setClaimError('Claim contract address is not configured')
+      if (!sale.claimContractAddress) {
+        setClaimError('Claim contract is not configured for this sale yet')
         return
       }
+      if (!sale.merkleRoot) {
+        setClaimError('Claim is not open yet (Merkle root not committed)')
+        return
+      }
+      const claimContractAddress = sale.claimContractAddress
 
       const ticketTypeCode = purchaseTicketTypeCode || selectedType?.code
       if (!ticketTypeCode) {
@@ -218,7 +243,18 @@ export default function SalePage({ params }: PageProps) {
         }
       } catch (err) {
         const baseMessage = err instanceof Error ? err.message : 'Claim failed'
-        setClaimError(isAuto ? `Auto-claim failed: ${baseMessage}` : baseMessage)
+        if (isAuto && shouldRetryAutoClaim(baseMessage)) {
+          setClaimError(`Auto-claim waiting: ${baseMessage}. Retrying in 5s...`)
+          if (autoClaimRetryTimerRef.current) {
+            window.clearTimeout(autoClaimRetryTimerRef.current)
+          }
+          autoClaimRetryTimerRef.current = window.setTimeout(() => {
+            autoClaimAttemptedTxRef.current = null
+            setAutoClaimRetryNonce((prev) => prev + 1)
+          }, 5000)
+        } else {
+          setClaimError(isAuto ? `Auto-claim failed: ${baseMessage}` : baseMessage)
+        }
       } finally {
         setClaiming(false)
       }
@@ -228,12 +264,13 @@ export default function SalePage({ params }: PageProps) {
 
   useEffect(() => {
     if (!sale || !txid || !myStatus?.found || !myStatus.isWinner || !myStatus.finalRank) return
+    if (!sale.claimContractAddress || !sale.merkleRoot) return
     if (claiming || claimTxHash) return
     if (autoClaimAttemptedTxRef.current === txid) return
 
     autoClaimAttemptedTxRef.current = txid
     void handleClaim(true)
-  }, [sale, txid, myStatus, claiming, claimTxHash, handleClaim])
+  }, [sale, txid, myStatus, claiming, claimTxHash, handleClaim, autoClaimRetryNonce])
 
   useEffect(() => {
     if (!txid || !wallet.address) return
@@ -277,7 +314,8 @@ export default function SalePage({ params }: PageProps) {
   const displayPrice = selectedType
     ? formatTokenAmount(BigInt(selectedType.priceSompi))
     : formatTokenAmount(BigInt(sale.ticketPriceSompi))
-  const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK
+  const claimContractAddress = sale.claimContractAddress
+  const claimEnabled = Boolean(sale.claimContractAddress && sale.merkleRoot)
   const paymentStepState: PipelineState = txid ? 'done' : 'pending'
   const indexedStepState: PipelineState = myStatus?.found ? 'done' : 'active'
   const winnerStepState: PipelineState =
@@ -514,7 +552,9 @@ export default function SalePage({ params }: PageProps) {
                         : claimTxHash
                           ? `Claim tx sent ${claimTxHash.slice(0, 10)}...`
                           : myStatus?.isWinner
-                            ? 'Auto-claim in progress'
+                            ? claimEnabled
+                              ? 'Auto-claim in progress'
+                              : 'Waiting for organizer to open claim'
                             : 'Only winners mint',
                     },
                   ].map((step) => (
@@ -572,9 +612,13 @@ export default function SalePage({ params }: PageProps) {
                   {/* Claim Section for Winners */}
                   {myStatus.isWinner && (
                     <div className="mt-4 p-4 bg-green-900/20 border border-green-700 rounded">
-                      <div className="font-semibold text-green-400 mb-2">You won! NFT mint is running automatically.</div>
+                      <div className="font-semibold text-green-400 mb-2">
+                        You won! {claimEnabled ? 'NFT mint is running automatically.' : 'Claim will open soon.'}
+                      </div>
                       <p className="text-xs text-gray-400 mb-3">
-                        Winner is detected. The app automatically sends claim once proof is ready.
+                        Winner is detected. {claimEnabled
+                          ? 'The app automatically sends claim once proof is ready.'
+                          : 'Organizer has not opened claim yet (contract/merkle not ready).'}
                         Contract: {claimContractAddress || 'not configured'}
                       </p>
                       {claiming && (
@@ -608,11 +652,11 @@ export default function SalePage({ params }: PageProps) {
                         <div className="mb-3 text-sm text-red-400">{claimError}</div>
                       )}
                       <button
-                        disabled={claiming}
-                        className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-sm font-medium"
+                        disabled={claiming || !claimEnabled}
+                        className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded text-sm font-medium"
                         onClick={() => void handleClaim(false)}
                       >
-                        {claiming ? 'Claiming...' : claimTxHash ? 'Claim Again' : 'Claim Now'}
+                        {claiming ? 'Claiming...' : claimTxHash ? 'Claim Again' : claimEnabled ? 'Claim Now' : 'Claim Not Open'}
                       </button>
                     </div>
                   )}
@@ -633,7 +677,7 @@ export default function SalePage({ params }: PageProps) {
             <li>Send exact {PAYMENT_SYMBOL} amount to the EVM treasury address</li>
             <li>Your rank is determined by on-chain ordering (block/log order)</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
-            {claimContractAddress && (
+            {claimEnabled && (
               <li>Winners are auto-claimed on Kasplex when proof is ready</li>
             )}
             <li>Non-winner payments are not auto-rolled back on-chain (refund policy is organizer-managed)</li>

@@ -26,6 +26,30 @@ function createUniqueTag(): string {
   return `${Date.now()}-${randomBytes(4).toString('hex')}`
 }
 
+function buildLargeTicketCatalog(): Array<{
+  code: string
+  name: string
+  priceSompi: string
+  supply: number
+}> {
+  const baseTypes = [
+    { code: 'VIP', name: 'VIP', priceSompi: '1000000', supply: 1 },
+    { code: 'GEN', name: 'General', priceSompi: '2000000', supply: 2 },
+  ]
+
+  const extraTypes = Array.from({ length: 20 }, (_, index) => {
+    const seq = index + 1
+    return {
+      code: `TIER${String(seq).padStart(2, '0')}`,
+      name: `Tier ${seq}`,
+      priceSompi: String(1100000 + (index % 5) * 100000),
+      supply: 1,
+    }
+  })
+
+  return [...baseTypes, ...extraTypes]
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text()
   if (!text) return null
@@ -278,6 +302,7 @@ describe('API E2E - full ticket lifecycle', () => {
     eventId = createdEvent.body.id
 
     treasuryAddress = randomHex(20).toLowerCase()
+    const ticketCatalog = buildLargeTicketCatalog()
 
     const createdSale = await requestJson<{
       id: string
@@ -292,16 +317,16 @@ describe('API E2E - full ticket lifecycle', () => {
         ticketPriceSompi: '1000000',
         supplyTotal: 2,
         finalityDepth: 1,
-        ticketTypes: [
-          { code: 'VIP', name: 'VIP', priceSompi: '1000000', supply: 1 },
-          { code: 'GEN', name: 'General', priceSompi: '2000000', supply: 2 },
-        ],
+        ticketTypes: ticketCatalog,
       }),
     })
     expect(createdSale.status).toBe(201)
     expect(createdSale.body.status).toBe('scheduled')
     expect(createdSale.body.finalityDepth).toBe(1)
-    expect(createdSale.body.ticketTypes.map((t) => t.code)).toEqual(['VIP', 'GEN'])
+    expect(createdSale.body.ticketTypes).toHaveLength(22)
+    expect(createdSale.body.ticketTypes.some((t) => t.code === 'VIP')).toBe(true)
+    expect(createdSale.body.ticketTypes.some((t) => t.code === 'GEN')).toBe(true)
+    expect(new Set(createdSale.body.ticketTypes.map((t) => t.code)).size).toBe(22)
     saleId = createdSale.body.id
 
     const addType = await requestJson<{ id: string; code: string }>(
@@ -313,7 +338,7 @@ describe('API E2E - full ticket lifecycle', () => {
           name: 'Premium',
           priceSompi: '3000000',
           supply: 1,
-          sortOrder: 2,
+          sortOrder: 22,
         }),
       }
     )

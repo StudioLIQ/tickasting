@@ -18,6 +18,30 @@ function nowUnixSecondsString(): string {
   return Math.floor(Date.now() / 1000).toString()
 }
 
+function buildLargeTicketCatalog(): Array<{
+  code: string
+  name: string
+  priceSompi: string
+  supply: number
+}> {
+  const baseTypes = [
+    { code: 'VIP', name: 'VIP', priceSompi: '1000000', supply: 1 },
+    { code: 'GEN', name: 'General', priceSompi: '1000000', supply: 1 },
+  ]
+
+  const extraTypes = Array.from({ length: 20 }, (_, index) => {
+    const seq = index + 1
+    return {
+      code: `TIER${String(seq).padStart(2, '0')}`,
+      name: `Tier ${seq}`,
+      priceSompi: String(1100000 + (index % 5) * 100000),
+      supply: 1,
+    }
+  })
+
+  return [...baseTypes, ...extraTypes]
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text()
   if (!text) return null
@@ -220,7 +244,12 @@ async function main() {
     created.eventId = createdEvent.body.id
     created.treasury = treasury
 
-    const createdSale = await requestJson<{ id: string; status: string }>(
+    const ticketCatalog = buildLargeTicketCatalog()
+    const createdSale = await requestJson<{
+      id: string
+      status: string
+      ticketTypes: Array<{ code: string }>
+    }>(
       `/v1/events/${created.eventId}/sales`,
       {
         method: 'POST',
@@ -230,15 +259,15 @@ async function main() {
           ticketPriceSompi: '1000000',
           supplyTotal: 2,
           finalityDepth: 1,
-          ticketTypes: [
-            { code: 'VIP', name: 'VIP', priceSompi: '1000000', supply: 1 },
-            { code: 'GEN', name: 'General', priceSompi: '1000000', supply: 1 },
-          ],
+          ticketTypes: ticketCatalog,
         }),
       }
     )
     if (createdSale.status !== 201) throw new Error(`sale create failed: ${createdSale.status}`)
     if (createdSale.body.status !== 'scheduled') throw new Error('sale not scheduled')
+    if (createdSale.body.ticketTypes.length < 20) {
+      throw new Error('ticket type catalog was not created (expected >= 20)')
+    }
     created.saleId = createdSale.body.id
 
     const publish = await requestJson<{ sale: { status: string } }>(

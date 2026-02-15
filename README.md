@@ -267,6 +267,19 @@ Commonly used variables:
 
 See `.env.example` and the Quick Start section in this README for concrete setups.
 Deployment bulk env templates: `deploy/env/vercel-web.env`, `deploy/env/railway-api.env`, `deploy/env/railway-ponder.env`.
+You can sync them automatically with one command:
+
+```bash
+pnpm env:sync
+```
+
+Partial sync commands:
+
+```bash
+pnpm env:sync:vercel
+pnpm env:sync:railway
+pnpm env:sync:dry-run
+```
 
 ## Testing
 

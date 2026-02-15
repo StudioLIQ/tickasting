@@ -44,6 +44,12 @@
 - 컨트랙트 주소 `TICKASTING_CONTRACT_ADDRESS` (배포 후 입력)
 - treasury EVM 주소(세일 생성 시 사용)
 
+CLI 자동 반영(권장):
+
+- Vercel CLI (`vercel`)
+- Railway CLI (`railway`)
+- 한 번에 동기화: `pnpm env:sync`
+
 ---
 
 ## 2) Railway 프로젝트 생성
@@ -93,6 +99,20 @@ Railway 설정:
 
 - `deploy/env/railway-api.env` 파일 내용을 Railway `Variables`의 **Raw Editor**에 한 번에 붙여넣기
 - `DATABASE_URL`는 Railway Postgres reference 변수로 설정 권장 (`${{Postgres.DATABASE_URL}}`)
+
+자동 반영(CLI):
+
+```bash
+pnpm env:sync:railway
+```
+
+서비스명이 다르면:
+
+```bash
+RAILWAY_API_SERVICE=<api-service-name> \
+RAILWAY_PONDER_SERVICE=<ponder-service-name> \
+pnpm env:sync:railway
+```
 
 필수:
 
@@ -149,6 +169,12 @@ Railway 설정:
 - `deploy/env/railway-ponder.env` 파일 내용을 Railway `Variables`의 **Raw Editor**에 한 번에 붙여넣기
 - `DATABASE_URL`는 Railway Postgres reference 변수로 설정 권장 (`${{Postgres.DATABASE_URL}}`)
 
+자동 반영은 API/Ponder를 함께 처리합니다:
+
+```bash
+pnpm env:sync:railway
+```
+
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
@@ -179,6 +205,7 @@ pnpm --filter @tickasting/api db:seed
 
 - 현재 시드는 실제 콘서트 스타일 데이터(이벤트/세일/좌석/이미지/지갑 다수)로 구성됩니다.
 - 테스트넷 정책에 맞춰 티켓 가격은 전부 `0.1 ~ 0.5 USDC` 범위입니다.
+- 기본 시드 티켓 타입 총량은 `24개`입니다.
 
 ---
 
@@ -197,6 +224,14 @@ pnpm --filter @tickasting/api db:seed
 
 - `deploy/env/vercel-web.env` 파일 내용을 Vercel `Settings -> Environment Variables`에 한 번에 붙여넣기
 - `Production/Preview/Development` 타겟을 원하는 범위로 지정
+
+자동 반영(CLI):
+
+```bash
+pnpm env:sync:vercel
+```
+
+(`apps/web`가 `vercel link` 되어 있어야 합니다.)
 
 필수:
 

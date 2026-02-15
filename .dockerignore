@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.turbo
+node_modules
+**/node_modules
+**/dist
+**/.next
+coverage
+artifacts
+artifacts_runs
+tmp
+*.log
+.env
+.env.*
+!.env.example

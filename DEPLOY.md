@@ -93,6 +93,12 @@ Railway 설정:
 - Public Networking: ON
 - Custom Domain: `api-tickasting.studioliq.com`
 
+Docker 배포 시(선택):
+
+- Dockerfile Path: `apps/api/Dockerfile`
+- Build Context: 저장소 루트 (`.`)
+- Start Command는 Dockerfile `CMD` 사용
+
 ### 3-3. Variables
 
 빠른 적용(권장):
@@ -161,6 +167,12 @@ Railway 설정:
 - Root Directory: 저장소 루트 (`.`)
 - Healthcheck Path: `/health` (또는 `/ready`)
 - Public Networking: OFF (권장, 내부 운영)
+
+Docker 배포 시(선택):
+
+- Dockerfile Path: `apps/ponder/Dockerfile`
+- Build Context: 저장소 루트 (`.`)
+- Start Command는 Dockerfile `CMD` 사용
 
 ### 4-3. Variables
 
@@ -313,6 +325,15 @@ curl -X POST https://api-tickasting.studioliq.com/v1/sales/<saleId>/publish
 5. `https://tickasting.studioliq.com`에서 구매/내 티켓/티켓상세(양도/취소) 확인
 6. `https://api-tickasting.studioliq.com/v1/sales/<saleId>/my-status?txid=...`에서 상태 확인
 7. `https://api-tickasting.studioliq.com/v1/sales/<saleId>/allocation`에서 랭킹 확인
+
+---
+
+## 부록) Docker 로컬 빌드 확인
+
+```bash
+docker build -f apps/api/Dockerfile -t tickasting-api:test .
+docker build -f apps/ponder/Dockerfile -t tickasting-ponder:test .
+```
 
 성공 기준:
 

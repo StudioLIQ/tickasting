@@ -1,6 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import {
+  PUBLIC_EVM_EXPLORER_URL,
+  PUBLIC_KASPLEX_CHAIN_ID,
+  PUBLIC_PAYMENT_TOKEN_ADDRESS,
+} from '@/lib/public-runtime'
 
 interface EvmProvider {
   request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>
@@ -20,14 +25,11 @@ declare global {
   }
 }
 
-const PAYMENT_TOKEN_ADDRESS =
-  process.env['NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS'] ||
-  '0x593Cd4124ffE9D11B3114259fbC170a5759E0f54'
-const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
+const PAYMENT_TOKEN_ADDRESS = PUBLIC_PAYMENT_TOKEN_ADDRESS
+const KASPLEX_CHAIN_ID = PUBLIC_KASPLEX_CHAIN_ID
 const KASPLEX_CHAIN_ID_HEX = `0x${KASPLEX_CHAIN_ID.toString(16)}`
 const KASPLEX_RPC_URL = 'https://rpc.kasplextest.xyz'
-const KASPLEX_EXPLORER_URL =
-  process.env['NEXT_PUBLIC_EVM_EXPLORER_URL'] || 'https://explorer.testnet.kasplextest.xyz'
+const KASPLEX_EXPLORER_URL = PUBLIC_EVM_EXPLORER_URL
 const WALLET_SYNC_EVENT = 'tickasting:wallet-sync'
 const CLAIM_TICKET_SELECTOR = 'e1a15cb0'
 const ERC721_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'

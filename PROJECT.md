@@ -348,3 +348,19 @@ Messaging:
 
 - This document is now maintained in English for public-facing repository use.
 - Legacy Kaspa-native notes were replaced with EVM-first operational guidance.
+- 2026-02-15:
+  - Web public runtime values are treated as non-secret and pinned in frontend code defaults:
+    - `NEXT_PUBLIC_API_URL=https://api-tickasting.studioliq.com`
+    - `NEXT_PUBLIC_WS_URL=wss://api-tickasting.studioliq.com`
+    - `NEXT_PUBLIC_EVM_EXPLORER_URL=https://explorer.testnet.kasplextest.xyz`
+    - `NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS=0x63564786b99FFD006b30fdCCFf1d797723ebD598`
+    - `NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54`
+    - `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL=USDC`
+    - `NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS=6`
+    - `NEXT_PUBLIC_KASPLEX_CHAIN_ID=167012`
+  - Buyer flow updated to support auto-claim sequence on winner detection:
+    - Payment tx detected -> winner finalized -> Merkle proof fetched -> `claimTicket()` sent.
+    - Claim sync is attempted to API so `My Tickets` can reflect ownership faster.
+  - "Rollback" semantics clarified:
+    - If payment tx is rejected/reverted, rollback is implicit (no on-chain transfer).
+    - If payment tx succeeds but user loses, this is not rollback-capable on-chain and requires a separate refund policy/flow.

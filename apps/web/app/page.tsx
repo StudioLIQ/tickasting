@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { getSales, type Sale } from '@/lib/api'
+import { PUBLIC_PAYMENT_DECIMALS, PUBLIC_PAYMENT_SYMBOL } from '@/lib/public-runtime'
 
 type SaleStatusFilter = 'all' | 'live' | 'scheduled' | 'finalizing' | 'finalized'
 
-const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
-const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
+const PAYMENT_SYMBOL = PUBLIC_PAYMENT_SYMBOL
+const PAYMENT_DECIMALS = PUBLIC_PAYMENT_DECIMALS
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)

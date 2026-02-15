@@ -2,8 +2,8 @@
  * Web App Configuration
  */
 
-const PRODUCTION_WEB_HOST = 'tickasting.studioliq.com'
-const PRODUCTION_API_HTTP = 'https://api-tickasting.studioliq.com'
+import { PUBLIC_API_URL, PUBLIC_WEB_HOSTS, PUBLIC_WS_URL } from './public-runtime'
+
 const LOCAL_API_HTTP = 'http://localhost:4001'
 const LOCAL_API_WS = 'ws://localhost:4001'
 
@@ -26,19 +26,20 @@ function toWebSocketUrl(httpOrWsUrl: string): string {
 }
 
 function resolveApiBaseUrl(): string {
-  const fromEnv = process.env['NEXT_PUBLIC_API_URL']?.trim()
-  if (fromEnv) return trimTrailingSlash(fromEnv)
-
-  if (typeof window !== 'undefined' && window.location.hostname === PRODUCTION_WEB_HOST) {
-    return PRODUCTION_API_HTTP
+  if (
+    typeof window !== 'undefined' &&
+    PUBLIC_WEB_HOSTS.includes(window.location.hostname as (typeof PUBLIC_WEB_HOSTS)[number])
+  ) {
+    return PUBLIC_API_URL
   }
 
   return LOCAL_API_HTTP
 }
 
 function resolveWsBaseUrl(apiBaseUrl: string): string {
-  const fromEnv = process.env['NEXT_PUBLIC_WS_URL']?.trim()
-  if (fromEnv) return trimTrailingSlash(fromEnv)
+  if (apiBaseUrl === PUBLIC_API_URL) {
+    return trimTrailingSlash(PUBLIC_WS_URL)
+  }
 
   if (apiBaseUrl !== LOCAL_API_HTTP) {
     return toWebSocketUrl(apiBaseUrl)

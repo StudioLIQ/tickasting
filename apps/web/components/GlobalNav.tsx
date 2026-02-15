@@ -4,10 +4,15 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEvmWallet } from '@/hooks/useEvmWallet'
+import {
+  PUBLIC_KASPLEX_CHAIN_ID,
+  PUBLIC_PAYMENT_DECIMALS,
+  PUBLIC_PAYMENT_SYMBOL,
+} from '@/lib/public-runtime'
 
-const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
-const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
-const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
+const PAYMENT_SYMBOL = PUBLIC_PAYMENT_SYMBOL
+const PAYMENT_DECIMALS = PUBLIC_PAYMENT_DECIMALS
+const KASPLEX_CHAIN_ID = PUBLIC_KASPLEX_CHAIN_ID
 
 function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`

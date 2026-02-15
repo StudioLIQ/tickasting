@@ -1,26 +1,33 @@
 'use client'
 
 import { useState, useEffect, useCallback, use, useRef } from 'react'
+import Link from 'next/link'
 import { useEvmWallet } from '@/hooks/useEvmWallet'
 import {
   getSale,
   getMyStatus,
+  getMyTickets,
   getMerkleProof,
   syncClaim,
   type Sale,
   type MyStatus,
   type TicketType,
 } from '@/lib/api'
+import {
+  PUBLIC_KASPLEX_CHAIN_ID,
+  PUBLIC_PAYMENT_DECIMALS,
+  PUBLIC_PAYMENT_SYMBOL,
+  PUBLIC_TICKASTING_CONTRACT_ADDRESS,
+} from '@/lib/public-runtime'
 
 interface PageProps {
   params: Promise<{ saleId: string }>
 }
 
-const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
-const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
-const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
-const CLAIM_CONTRACT_ADDRESS_FALLBACK =
-  process.env['NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS'] || null
+const PAYMENT_SYMBOL = PUBLIC_PAYMENT_SYMBOL
+const PAYMENT_DECIMALS = PUBLIC_PAYMENT_DECIMALS
+const KASPLEX_CHAIN_ID = PUBLIC_KASPLEX_CHAIN_ID
+const CLAIM_CONTRACT_ADDRESS_FALLBACK = PUBLIC_TICKASTING_CONTRACT_ADDRESS
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)
@@ -36,6 +43,15 @@ function getSaleRemainingLabel(sale: Sale): string {
   if (!allHaveRemaining) return `${sale.supplyTotal}/${sale.supplyTotal}`
   const remaining = ticketTypes.reduce((sum, tt) => sum + (tt.remaining ?? 0), 0)
   return `${remaining}/${sale.supplyTotal}`
+}
+
+type PipelineState = 'done' | 'active' | 'pending' | 'failed'
+
+function pipelineStateClass(state: PipelineState): string {
+  if (state === 'done') return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+  if (state === 'active') return 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300'
+  if (state === 'failed') return 'border-red-500/40 bg-red-500/10 text-red-300'
+  return 'border-gray-700 bg-gray-900/50 text-gray-400'
 }
 
 export default function SalePage({ params }: PageProps) {
@@ -60,6 +76,8 @@ export default function SalePage({ params }: PageProps) {
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimTxHash, setClaimTxHash] = useState<string | null>(null)
   const [claimSynced, setClaimSynced] = useState(false)
+  const [claimedTicketId, setClaimedTicketId] = useState<string | null>(null)
+  const [ticketLookupPending, setTicketLookupPending] = useState(false)
   const autoClaimAttemptedTxRef = useRef<string | null>(null)
 
   // Load sale data
@@ -105,6 +123,8 @@ export default function SalePage({ params }: PageProps) {
     setClaimError(null)
     setClaimTxHash(null)
     setClaimSynced(false)
+    setClaimedTicketId(null)
+    setTicketLookupPending(false)
   }, [txid])
 
   // Handle purchase
@@ -128,6 +148,22 @@ export default function SalePage({ params }: PageProps) {
       setPurchasing(false)
     }
   }, [sale, wallet, selectedType])
+
+  const refreshClaimedTicket = useCallback(async () => {
+    if (!wallet.address || !txid) return
+    setTicketLookupPending(true)
+    try {
+      const myTickets = await getMyTickets(wallet.address, { saleId, limit: 100 })
+      const matched = myTickets.tickets.find((ticket) => ticket.originTxid.toLowerCase() === txid.toLowerCase())
+      if (matched) {
+        setClaimedTicketId(matched.id)
+      }
+    } catch {
+      // Ignore transient lookup failures.
+    } finally {
+      setTicketLookupPending(false)
+    }
+  }, [wallet.address, txid, saleId])
 
   const handleClaim = useCallback(
     async (isAuto = false) => {
@@ -164,6 +200,7 @@ export default function SalePage({ params }: PageProps) {
         })
 
         setClaimTxHash(claimResult.txHash)
+        void refreshClaimedTicket()
         if (claimResult.tokenId) {
           try {
             await syncClaim(saleId, {
@@ -186,7 +223,7 @@ export default function SalePage({ params }: PageProps) {
         setClaiming(false)
       }
     },
-    [sale, txid, wallet, myStatus, purchaseTicketTypeCode, selectedType, saleId]
+    [sale, txid, wallet, myStatus, purchaseTicketTypeCode, selectedType, saleId, refreshClaimedTicket]
   )
 
   useEffect(() => {
@@ -197,6 +234,20 @@ export default function SalePage({ params }: PageProps) {
     autoClaimAttemptedTxRef.current = txid
     void handleClaim(true)
   }, [sale, txid, myStatus, claiming, claimTxHash, handleClaim])
+
+  useEffect(() => {
+    if (!txid || !wallet.address) return
+    if (!myStatus?.isWinner) return
+
+    void refreshClaimedTicket()
+
+    if (claimedTicketId) return
+
+    const interval = setInterval(() => {
+      void refreshClaimedTicket()
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [txid, wallet.address, myStatus?.isWinner, claimedTicketId, refreshClaimedTicket])
 
   if (loading) {
     return (
@@ -226,6 +277,18 @@ export default function SalePage({ params }: PageProps) {
   const displayPrice = selectedType
     ? formatTokenAmount(BigInt(selectedType.priceSompi))
     : formatTokenAmount(BigInt(sale.ticketPriceSompi))
+  const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK
+  const paymentStepState: PipelineState = txid ? 'done' : 'pending'
+  const indexedStepState: PipelineState = myStatus?.found ? 'done' : 'active'
+  const winnerStepState: PipelineState =
+    myStatus?.isWinner === true ? 'done' : myStatus?.found ? 'failed' : 'pending'
+  const mintStepState: PipelineState = claimedTicketId || claimTxHash
+    ? 'done'
+    : claimError
+      ? 'failed'
+      : myStatus?.isWinner
+        ? (claiming || ticketLookupPending ? 'active' : 'pending')
+        : 'pending'
 
   return (
     <main className="min-h-screen p-8">
@@ -331,11 +394,11 @@ export default function SalePage({ params }: PageProps) {
               <span className="text-gray-400">Finality Depth:</span>
               <span className="ml-2 text-white">{sale.finalityDepth}</span>
             </div>
-            {(sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK) && (
+            {claimContractAddress && (
               <div className="col-span-2">
                 <span className="text-gray-400">Contract:</span>
                 <span className="ml-2 text-white font-mono text-xs">
-                  {sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK}
+                  {claimContractAddress}
                 </span>
               </div>
             )}
@@ -418,6 +481,51 @@ export default function SalePage({ params }: PageProps) {
                 </div>
               )}
 
+              <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Auto Mint Pipeline
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    {
+                      label: '1) Payment Sent',
+                      state: paymentStepState,
+                      detail: 'USDC transfer submitted',
+                    },
+                    {
+                      label: '2) Queue Indexed',
+                      state: indexedStepState,
+                      detail: myStatus?.found ? `status=${myStatus.validationStatus}` : 'Waiting for indexer',
+                    },
+                    {
+                      label: '3) Winner Check',
+                      state: winnerStepState,
+                      detail: myStatus?.isWinner
+                        ? `Winner rank #${myStatus.finalRank ?? '-'}`
+                        : myStatus?.found
+                          ? 'Not in winner set'
+                          : 'Pending final rank',
+                    },
+                    {
+                      label: '4) NFT Mint',
+                      state: mintStepState,
+                      detail: claimedTicketId
+                        ? `Minted ticket ${claimedTicketId}`
+                        : claimTxHash
+                          ? `Claim tx sent ${claimTxHash.slice(0, 10)}...`
+                          : myStatus?.isWinner
+                            ? 'Auto-claim in progress'
+                            : 'Only winners mint',
+                    },
+                  ].map((step) => (
+                    <div key={step.label} className={`rounded-md border px-3 py-2 text-xs ${pipelineStateClass(step.state)}`}>
+                      <div className="font-medium">{step.label}</div>
+                      <div className="mt-1 opacity-90">{step.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {myStatus && myStatus.found ? (
                 <>
                   <div>
@@ -464,10 +572,10 @@ export default function SalePage({ params }: PageProps) {
                   {/* Claim Section for Winners */}
                   {myStatus.isWinner && (
                     <div className="mt-4 p-4 bg-green-900/20 border border-green-700 rounded">
-                      <div className="font-semibold text-green-400 mb-2">You won! Claiming your ticket...</div>
+                      <div className="font-semibold text-green-400 mb-2">You won! NFT mint is running automatically.</div>
                       <p className="text-xs text-gray-400 mb-3">
                         Winner is detected. The app automatically sends claim once proof is ready.
-                        Contract: {sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK || 'not configured'}
+                        Contract: {claimContractAddress || 'not configured'}
                       </p>
                       {claiming && (
                         <div className="mb-3 text-sm text-yellow-300">
@@ -478,6 +586,22 @@ export default function SalePage({ params }: PageProps) {
                         <div className="mb-3 text-xs text-green-300 break-all">
                           Claim tx: {claimTxHash}
                           {claimSynced ? ' (synced)' : ''}
+                        </div>
+                      )}
+                      {claimedTicketId && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          <Link
+                            href={`/tickets/${claimedTicketId}`}
+                            className="rounded-md bg-kaspa-primary px-3 py-2 text-xs font-semibold text-black hover:bg-kaspa-primary/90"
+                          >
+                            Open Minted Ticket
+                          </Link>
+                          <Link
+                            href="/my-tickets"
+                            className="rounded-md border border-gray-600 px-3 py-2 text-xs text-gray-200 hover:border-gray-400"
+                          >
+                            Go My Tickets
+                          </Link>
                         </div>
                       )}
                       {claimError && (
@@ -509,9 +633,10 @@ export default function SalePage({ params }: PageProps) {
             <li>Send exact {PAYMENT_SYMBOL} amount to the EVM treasury address</li>
             <li>Your rank is determined by on-chain ordering (block/log order)</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
-            {(sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK) && (
+            {claimContractAddress && (
               <li>Winners are auto-claimed on Kasplex when proof is ready</li>
             )}
+            <li>Non-winner payments are not auto-rolled back on-chain (refund policy is organizer-managed)</li>
           </ol>
         </div>
       </div>

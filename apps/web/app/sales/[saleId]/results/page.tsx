@@ -11,9 +11,9 @@ import {
   type MerkleProofResponse,
   type TicketType,
 } from '@/lib/api'
+import { PUBLIC_EVM_EXPLORER_URL } from '@/lib/public-runtime'
 
-const EVM_EXPLORER_BASE_URL =
-  (process.env.NEXT_PUBLIC_EVM_EXPLORER_URL || 'https://explorer.testnet.kasplextest.xyz').replace(/\/$/, '')
+const EVM_EXPLORER_BASE_URL = PUBLIC_EVM_EXPLORER_URL.replace(/\/$/, '')
 
 function getKaspaTxUrl(txid: string): string {
   return `${EVM_EXPLORER_BASE_URL}/tx/${txid}`

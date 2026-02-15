@@ -599,7 +599,6 @@ packages/shared (payload/PoW/ordering utils)
 infra/docker (postgres/redis)
 docs (아키텍처/검증 방법)
 PROJECT.md (본 문서)
-TICKET.md (작업 티켓)
 LICENSE (MIT 권장)
 README.md (영문, 재현 가능한 실행법)
 ```

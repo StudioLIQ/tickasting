@@ -3,7 +3,7 @@
 ## Status
 - **Finalized**: 2026-02-14
 - **Track**: EVM Testnet (Sepolia) — Solidity + Hardhat + ERC-721
-- Source of truth for implementation tickets: `TICKET.md` GP-019 ~ GP-026
+- Source of truth for implementation tickets: internal ticket tracker (GP-019 ~ GP-026)
 
 ---
 

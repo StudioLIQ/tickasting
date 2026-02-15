@@ -256,17 +256,7 @@ Commonly used variables:
 - `PONDER_RPC_URL_11155111`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
 - `CONTRACT_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY` contract deployment
 
-See `.env.example` and `LOCAL.md` for concrete setups.
-
-## Deployment
-
-Production setup guidance is in:
-
-- `DEPLOY.md`
-
-Local development and demo runbook:
-
-- `LOCAL.md`
+See `.env.example` and the Quick Start section in this README for concrete setups.
 
 ## Testing
 

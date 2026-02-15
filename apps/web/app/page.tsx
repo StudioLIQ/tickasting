@@ -42,6 +42,18 @@ function getPriceRangeLabel(sale: Sale): string {
   return `${formatTokenAmount(minPrice)} - ${formatTokenAmount(maxPrice)} ${PAYMENT_SYMBOL}`
 }
 
+function getRemainingSupplyLabel(sale: Sale): string {
+  const total = sale.supplyTotal
+  const ticketTypes = sale.ticketTypes ?? []
+  const allHaveRemaining = ticketTypes.length > 0 && ticketTypes.every((tt) => typeof tt.remaining === 'number')
+  if (!allHaveRemaining) {
+    return `${total}/${total}`
+  }
+
+  const remaining = ticketTypes.reduce((sum, tt) => sum + (tt.remaining ?? 0), 0)
+  return `${remaining}/${total}`
+}
+
 function statusClassName(status: string): string {
   switch (status) {
     case 'live':
@@ -220,7 +232,7 @@ export default function Home() {
                             <span className="text-gray-500">Price</span>: {getPriceRangeLabel(sale)}
                           </div>
                           <div>
-                            <span className="text-gray-500">Supply</span>: {sale.supplyTotal}
+                            <span className="text-gray-500">Supply</span>: {getRemainingSupplyLabel(sale)}
                           </div>
                           <div>
                             <span className="text-gray-500">Start</span>: {formatDate(sale.startAt)}

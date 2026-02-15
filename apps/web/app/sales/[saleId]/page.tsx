@@ -1,8 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, use, useRef } from 'react'
 import { useEvmWallet } from '@/hooks/useEvmWallet'
-import { getSale, getMyStatus, type Sale, type MyStatus, type TicketType } from '@/lib/api'
+import {
+  getSale,
+  getMyStatus,
+  getMerkleProof,
+  syncClaim,
+  type Sale,
+  type MyStatus,
+  type TicketType,
+} from '@/lib/api'
 
 interface PageProps {
   params: Promise<{ saleId: string }>
@@ -11,6 +19,8 @@ interface PageProps {
 const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
 const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
 const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
+const CLAIM_CONTRACT_ADDRESS_FALLBACK =
+  process.env['NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS'] || null
 
 function formatTokenAmount(raw: bigint): string {
   const base = 10n ** BigInt(PAYMENT_DECIMALS)
@@ -18,6 +28,14 @@ function formatTokenAmount(raw: bigint): string {
   const frac = raw % base
   const fracText = frac.toString().padStart(PAYMENT_DECIMALS, '0').replace(/0+$/, '')
   return fracText.length > 0 ? `${whole.toString()}.${fracText}` : whole.toString()
+}
+
+function getSaleRemainingLabel(sale: Sale): string {
+  const ticketTypes = sale.ticketTypes ?? []
+  const allHaveRemaining = ticketTypes.length > 0 && ticketTypes.every((tt) => typeof tt.remaining === 'number')
+  if (!allHaveRemaining) return `${sale.supplyTotal}/${sale.supplyTotal}`
+  const remaining = ticketTypes.reduce((sum, tt) => sum + (tt.remaining ?? 0), 0)
+  return `${remaining}/${sale.supplyTotal}`
 }
 
 export default function SalePage({ params }: PageProps) {
@@ -36,6 +54,13 @@ export default function SalePage({ params }: PageProps) {
   const [purchasing, setPurchasing] = useState(false)
   const [txid, setTxid] = useState<string | null>(null)
   const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
+  const [purchaseTicketTypeCode, setPurchaseTicketTypeCode] = useState<string | null>(null)
+  const [purchaseTicketTypeName, setPurchaseTicketTypeName] = useState<string | null>(null)
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | null>(null)
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null)
+  const [claimSynced, setClaimSynced] = useState(false)
+  const autoClaimAttemptedTxRef = useRef<string | null>(null)
 
   // Load sale data
   useEffect(() => {
@@ -74,6 +99,14 @@ export default function SalePage({ params }: PageProps) {
     return () => clearInterval(interval)
   }, [txid, saleId, sale])
 
+  useEffect(() => {
+    autoClaimAttemptedTxRef.current = null
+    setClaiming(false)
+    setClaimError(null)
+    setClaimTxHash(null)
+    setClaimSynced(false)
+  }, [txid])
+
   // Handle purchase
   const handlePurchase = useCallback(async () => {
     if (!sale || !wallet.isConnected || !wallet.address) return
@@ -87,12 +120,83 @@ export default function SalePage({ params }: PageProps) {
       const txHash = await wallet.sendUsdcTransfer(sale.treasuryAddress, BigInt(price))
 
       setTxid(txHash)
+      setPurchaseTicketTypeCode(selectedType?.code ?? null)
+      setPurchaseTicketTypeName(selectedType?.name ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Purchase failed')
     } finally {
       setPurchasing(false)
     }
   }, [sale, wallet, selectedType])
+
+  const handleClaim = useCallback(
+    async (isAuto = false) => {
+      if (!sale || !txid || !wallet.address) return
+      if (!myStatus?.isWinner || !myStatus.finalRank) return
+
+      const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK
+      if (!claimContractAddress) {
+        setClaimError('Claim contract address is not configured')
+        return
+      }
+
+      const ticketTypeCode = purchaseTicketTypeCode || selectedType?.code
+      if (!ticketTypeCode) {
+        setClaimError('Ticket type code is missing for claim')
+        return
+      }
+
+      setClaiming(true)
+      setClaimError(null)
+
+      try {
+        const proof = await getMerkleProof(saleId, txid)
+        if (!proof.found || !proof.finalRank || !proof.proof) {
+          throw new Error('Merkle proof is not ready yet')
+        }
+
+        const claimResult = await wallet.claimTicket({
+          contractAddress: claimContractAddress,
+          ticketTypeCode,
+          kaspaTxid: txid,
+          finalRank: proof.finalRank,
+          merkleProof: proof.proof.map((step) => step.hash),
+        })
+
+        setClaimTxHash(claimResult.txHash)
+        if (claimResult.tokenId) {
+          try {
+            await syncClaim(saleId, {
+              kaspaTxid: txid,
+              ticketTypeCode,
+              claimerEvmAddress: wallet.address,
+              claimTxHash: claimResult.txHash,
+              tokenId: claimResult.tokenId,
+              finalRank: proof.finalRank,
+            })
+            setClaimSynced(true)
+          } catch {
+            setClaimSynced(false)
+          }
+        }
+      } catch (err) {
+        const baseMessage = err instanceof Error ? err.message : 'Claim failed'
+        setClaimError(isAuto ? `Auto-claim failed: ${baseMessage}` : baseMessage)
+      } finally {
+        setClaiming(false)
+      }
+    },
+    [sale, txid, wallet, myStatus, purchaseTicketTypeCode, selectedType, saleId]
+  )
+
+  useEffect(() => {
+    if (!sale || !txid || !myStatus?.found || !myStatus.isWinner || !myStatus.finalRank) return
+    if (claiming || claimTxHash) return
+    if (autoClaimAttemptedTxRef.current === txid) return
+
+    autoClaimAttemptedTxRef.current = txid
+    void handleClaim(true)
+  }, [sale, txid, myStatus, claiming, claimTxHash, handleClaim])
 
   if (loading) {
     return (
@@ -182,7 +286,7 @@ export default function SalePage({ params }: PageProps) {
                             <span className="text-red-400">SOLD OUT</span>
                           ) : (
                             <>
-                              {tt.remaining ?? tt.supply} / {tt.supply} left
+                              {tt.remaining ?? tt.supply}/{tt.supply}
                             </>
                           )}
                         </div>
@@ -206,8 +310,8 @@ export default function SalePage({ params }: PageProps) {
               </div>
             )}
             <div>
-              <span className="text-gray-400">Total Supply:</span>
-              <span className="ml-2 text-white">{sale.supplyTotal} tickets</span>
+              <span className="text-gray-400">Supply:</span>
+              <span className="ml-2 text-white">{getSaleRemainingLabel(sale)}</span>
             </div>
             <div>
               <span className="text-gray-400">Status:</span>
@@ -227,11 +331,11 @@ export default function SalePage({ params }: PageProps) {
               <span className="text-gray-400">Finality Depth:</span>
               <span className="ml-2 text-white">{sale.finalityDepth}</span>
             </div>
-            {sale.claimContractAddress && (
+            {(sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK) && (
               <div className="col-span-2">
                 <span className="text-gray-400">Contract:</span>
                 <span className="ml-2 text-white font-mono text-xs">
-                  {sale.claimContractAddress}
+                  {sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK}
                 </span>
               </div>
             )}
@@ -304,10 +408,13 @@ export default function SalePage({ params }: PageProps) {
                 <span className="text-gray-400">Transaction Hash:</span>
                 <span className="ml-2 text-white font-mono text-xs break-all">{txid}</span>
               </div>
-              {selectedType && (
+              {(purchaseTicketTypeName || selectedType) && (
                 <div>
                   <span className="text-gray-400">Ticket Type:</span>
-                  <span className="ml-2 text-white">{selectedType.name} ({selectedType.code})</span>
+                  <span className="ml-2 text-white">
+                    {purchaseTicketTypeName || selectedType?.name}{' '}
+                    ({purchaseTicketTypeCode || selectedType?.code})
+                  </span>
                 </div>
               )}
 
@@ -355,22 +462,33 @@ export default function SalePage({ params }: PageProps) {
                   )}
 
                   {/* Claim Section for Winners */}
-                  {myStatus.isWinner && sale.claimContractAddress && (
+                  {myStatus.isWinner && (
                     <div className="mt-4 p-4 bg-green-900/20 border border-green-700 rounded">
-                      <div className="font-semibold text-green-400 mb-2">You won! Claim your ticket</div>
+                      <div className="font-semibold text-green-400 mb-2">You won! Claiming your ticket...</div>
                       <p className="text-xs text-gray-400 mb-3">
-                        Connect MetaMask to claim your ERC-721 ticket on Kasplex testnet.
-                        Contract: {sale.claimContractAddress}
+                        Winner is detected. The app automatically sends claim once proof is ready.
+                        Contract: {sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK || 'not configured'}
                       </p>
+                      {claiming && (
+                        <div className="mb-3 text-sm text-yellow-300">
+                          Claim transaction in progress. Confirm in wallet if prompted.
+                        </div>
+                      )}
+                      {claimTxHash && (
+                        <div className="mb-3 text-xs text-green-300 break-all">
+                          Claim tx: {claimTxHash}
+                          {claimSynced ? ' (synced)' : ''}
+                        </div>
+                      )}
+                      {claimError && (
+                        <div className="mb-3 text-sm text-red-400">{claimError}</div>
+                      )}
                       <button
+                        disabled={claiming}
                         className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-sm font-medium"
-                        onClick={() => {
-                          alert(
-                            `Claim via MetaMask:\n\nContract: ${sale.claimContractAddress}\nFunction: claimTicket()\nTxid: ${txid}\nRank: ${myStatus.finalRank}\n\n(Full MetaMask integration coming in production)`
-                          )
-                        }}
+                        onClick={() => void handleClaim(false)}
                       >
-                        Claim Ticket on Kasplex
+                        {claiming ? 'Claiming...' : claimTxHash ? 'Claim Again' : 'Claim Now'}
                       </button>
                     </div>
                   )}
@@ -391,8 +509,8 @@ export default function SalePage({ params }: PageProps) {
             <li>Send exact {PAYMENT_SYMBOL} amount to the EVM treasury address</li>
             <li>Your rank is determined by on-chain ordering (block/log order)</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
-            {sale.claimContractAddress && (
-              <li>Winners claim their ERC-721 ticket on Kasplex testnet via MetaMask</li>
+            {(sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK) && (
+              <li>Winners are auto-claimed on Kasplex when proof is ready</li>
             )}
           </ol>
         </div>

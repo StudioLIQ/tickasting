@@ -29,6 +29,9 @@ const KASPLEX_RPC_URL = 'https://rpc.kasplextest.xyz'
 const KASPLEX_EXPLORER_URL =
   process.env['NEXT_PUBLIC_EVM_EXPLORER_URL'] || 'https://explorer.testnet.kasplextest.xyz'
 const WALLET_SYNC_EVENT = 'tickasting:wallet-sync'
+const CLAIM_TICKET_SELECTOR = 'e1a15cb0'
+const ERC721_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+const ZERO_TOPIC = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 interface EvmRequestError extends Error {
   code?: number
@@ -49,6 +52,122 @@ function encodeErc20BalanceOf(address: string): string {
   const methodId = '70a08231'
   const ownerArg = padHex(address.toLowerCase().replace(/^0x/, ''))
   return `0x${methodId}${ownerArg}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function strip0x(value: string): string {
+  return value.startsWith('0x') ? value.slice(2) : value
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function normalizeBytes32(value: string, label: string): string {
+  const trimmed = value.trim()
+  if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return trimmed.toLowerCase()
+  }
+
+  const encoded = bytesToHex(new TextEncoder().encode(trimmed))
+  if (encoded.length === 0 || encoded.length > 64) {
+    throw new Error(`${label} must be bytes32 hex or <= 32 ASCII chars`)
+  }
+  return `0x${encoded.padEnd(64, '0')}`.toLowerCase()
+}
+
+function normalizeAddressTopic(address: string): string {
+  return `0x${strip0x(address.toLowerCase()).padStart(64, '0')}`
+}
+
+function normalizeProofHash(value: string): string {
+  const normalized = strip0x(value.trim())
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error('Invalid merkle proof hash')
+  }
+  return `0x${normalized.toLowerCase()}`
+}
+
+function encodeClaimTicket(
+  ticketTypeCode: string,
+  kaspaTxid: string,
+  finalRank: number,
+  merkleProof: string[]
+): string {
+  const typeCodeHex = strip0x(normalizeBytes32(ticketTypeCode, 'ticketTypeCode'))
+  const kaspaTxidHex = strip0x(normalizeBytes32(kaspaTxid, 'kaspaTxid'))
+  const finalRankHex = padHex(BigInt(finalRank).toString(16))
+  const headOffsetHex = padHex((32n * 4n).toString(16))
+  const normalizedProof = merkleProof.map((entry) => strip0x(normalizeProofHash(entry)))
+  const proofLengthHex = padHex(BigInt(normalizedProof.length).toString(16))
+  const proofItems = normalizedProof.map((entry) => entry.padStart(64, '0')).join('')
+
+  return `0x${CLAIM_TICKET_SELECTOR}${typeCodeHex}${kaspaTxidHex}${finalRankHex}${headOffsetHex}${proofLengthHex}${proofItems}`
+}
+
+interface EvmReceiptLog {
+  address?: string
+  topics?: string[]
+}
+
+interface EvmTransactionReceipt {
+  status?: string
+  logs?: EvmReceiptLog[]
+}
+
+async function waitForTransactionReceipt(
+  provider: EvmProvider,
+  txHash: string,
+  timeoutMs = 120_000
+): Promise<EvmTransactionReceipt> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt <= timeoutMs) {
+    const raw = await provider.request({
+      method: 'eth_getTransactionReceipt',
+      params: [txHash],
+    })
+
+    if (raw && typeof raw === 'object') {
+      return raw as EvmTransactionReceipt
+    }
+    await sleep(2000)
+  }
+
+  throw new Error('Timed out waiting for transaction confirmation')
+}
+
+function extractMintedTokenId(
+  receipt: EvmTransactionReceipt,
+  contractAddress: string,
+  ownerAddress: string
+): string | null {
+  const logs = Array.isArray(receipt.logs) ? receipt.logs : []
+  const expectedContract = contractAddress.toLowerCase()
+  const expectedOwnerTopic = normalizeAddressTopic(ownerAddress)
+
+  for (const log of logs) {
+    const logAddress = log.address?.toLowerCase()
+    const topics = log.topics ?? []
+    if (!logAddress || topics.length < 4) continue
+    if (logAddress !== expectedContract) continue
+    if (topics[0]?.toLowerCase() !== ERC721_TRANSFER_TOPIC) continue
+    if (topics[1]?.toLowerCase() !== ZERO_TOPIC) continue
+    if (topics[2]?.toLowerCase() !== expectedOwnerTopic) continue
+
+    const tokenHex = topics[3]
+    if (!tokenHex) continue
+    try {
+      return BigInt(tokenHex).toString()
+    } catch {
+      continue
+    }
+  }
+  return null
 }
 
 function parseHexToBigInt(raw: unknown): bigint {
@@ -106,6 +225,13 @@ export interface UseEvmWalletResult {
   refreshBalances: () => Promise<void>
   ensureKasplexChain: () => Promise<void>
   sendUsdcTransfer: (toAddress: string, amount: bigint) => Promise<string>
+  claimTicket: (params: {
+    contractAddress: string
+    ticketTypeCode: string
+    kaspaTxid: string
+    finalRank: number
+    merkleProof: string[]
+  }) => Promise<{ txHash: string; tokenId: string | null }>
 }
 
 export function useEvmWallet(): UseEvmWalletResult {
@@ -335,6 +461,60 @@ export function useEvmWallet(): UseEvmWalletResult {
     [address, ensureKasplexChain]
   )
 
+  const claimTicket = useCallback(
+    async (params: {
+      contractAddress: string
+      ticketTypeCode: string
+      kaspaTxid: string
+      finalRank: number
+      merkleProof: string[]
+    }): Promise<{ txHash: string; tokenId: string | null }> => {
+      const provider = getInjectedProvider()
+      if (!provider) throw new Error('EVM wallet is required')
+      if (!address) throw new Error('Wallet not connected')
+      if (!/^0x[a-fA-F0-9]{40}$/.test(params.contractAddress)) {
+        throw new Error('Invalid claim contract address')
+      }
+      if (!Number.isInteger(params.finalRank) || params.finalRank <= 0) {
+        throw new Error('Invalid finalRank')
+      }
+
+      await ensureKasplexChain()
+
+      const data = encodeClaimTicket(
+        params.ticketTypeCode,
+        params.kaspaTxid,
+        params.finalRank,
+        params.merkleProof
+      )
+
+      const txHash = (await provider.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: address,
+            to: params.contractAddress,
+            value: '0x0',
+            data,
+          },
+        ],
+      })) as string
+
+      const normalizedTxHash = txHash.toLowerCase()
+      const receipt = await waitForTransactionReceipt(provider, normalizedTxHash)
+      if (receipt.status === '0x0') {
+        throw new Error(`Claim transaction reverted: ${normalizedTxHash}`)
+      }
+
+      const tokenId = extractMintedTokenId(receipt, params.contractAddress, address)
+      return {
+        txHash: normalizedTxHash,
+        tokenId,
+      }
+    },
+    [address, ensureKasplexChain]
+  )
+
   useEffect(() => {
     const provider = getInjectedProvider()
     if (!provider) return
@@ -399,5 +579,6 @@ export function useEvmWallet(): UseEvmWalletResult {
     refreshBalances,
     ensureKasplexChain,
     sendUsdcTransfer,
+    claimTicket,
   }
 }

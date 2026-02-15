@@ -211,6 +211,29 @@ export async function getClaimStatus(saleId: string): Promise<ClaimStatusRespons
   return res.json()
 }
 
+export interface SyncClaimPayload {
+  kaspaTxid: string
+  ticketTypeCode: string
+  claimerEvmAddress: string
+  claimTxHash: string
+  tokenId: string
+  finalRank: number
+}
+
+export async function syncClaim(saleId: string, payload: SyncClaimPayload): Promise<void> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/claims/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const message =
+      body && typeof body === 'object' && 'error' in body ? String((body as { error: unknown }).error) : `Failed to sync claim: ${res.status}`
+    throw new Error(message)
+  }
+}
+
 export interface MyTicket {
   id: string
   saleId: string

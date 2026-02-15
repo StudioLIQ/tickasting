@@ -97,9 +97,8 @@ export default function LiveDashboard({ params }: PageProps) {
         {/* Main Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatCard
-            label="Remaining"
-            value={remaining.toString()}
-            sublabel={`of ${supplyTotal}`}
+            label="Supply"
+            value={`${remaining}/${supplyTotal}`}
             highlight={remaining <= 10}
           />
           <StatCard
@@ -134,7 +133,7 @@ export default function LiveDashboard({ params }: PageProps) {
           </div>
           <div className="flex justify-between mt-2 text-sm text-gray-500">
             <span>{supplyTotal - remaining} sold</span>
-            <span>{remaining} remaining</span>
+            <span>{remaining}/{supplyTotal}</span>
           </div>
         </div>
 
@@ -164,7 +163,7 @@ export default function LiveDashboard({ params }: PageProps) {
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{tt.minted ?? 0} claimed</span>
-                      <span>{tt.remaining ?? tt.supply} left</span>
+                      <span>{tt.remaining ?? tt.supply}/{tt.supply}</span>
                     </div>
                   </div>
                 )

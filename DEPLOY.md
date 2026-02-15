@@ -255,6 +255,7 @@ pnpm env:sync:vercel
 - `NEXT_PUBLIC_API_URL=https://api-tickasting.studioliq.com`
 - `NEXT_PUBLIC_WS_URL=wss://api-tickasting.studioliq.com` (옵션, 미설정 시 `NEXT_PUBLIC_API_URL`에서 자동 유도)
 - `NEXT_PUBLIC_EVM_EXPLORER_URL=https://explorer.testnet.kasplextest.xyz`
+- `NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS=0x<deployed-contract-address>` (자동 클레임 fallback)
 - `NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54`
 - `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL=USDC`
 - `NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS=6`

@@ -80,6 +80,7 @@ PURCHASE_MODE=evm
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
 NEXT_PUBLIC_EVM_EXPLORER_URL=https://explorer.testnet.kasplextest.xyz
+NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS=0x<deployed-contract-address>
 NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
 NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL=USDC
 NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS=6
@@ -96,6 +97,7 @@ Vercel production (`apps/web`) values:
 ```dotenv
 NEXT_PUBLIC_API_URL=https://api-tickasting.studioliq.com
 NEXT_PUBLIC_WS_URL=wss://api-tickasting.studioliq.com # optional, auto-derived if omitted
+NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS=0x<deployed-contract-address> # for auto-claim
 ```
 
 ### 5) Run services
@@ -261,6 +263,7 @@ Commonly used variables:
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)
 - `NEXT_PUBLIC_EVM_EXPLORER_URL` web explorer base URL for tx/block links
+- `NEXT_PUBLIC_TICKASTING_CONTRACT_ADDRESS` web auto-claim contract fallback
 - `NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS`, `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL`, `NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS`
 - `NEXT_PUBLIC_KASPLEX_CHAIN_ID` expected chain id for wallet UX
 - `WS_BROADCAST_INTERVAL_MS` API websocket broadcast interval

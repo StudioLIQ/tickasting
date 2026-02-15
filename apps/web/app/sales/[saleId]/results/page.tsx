@@ -160,7 +160,7 @@ export default function ResultsPage({ params }: PageProps) {
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="text-sm text-gray-400">Supply</div>
             <div className="text-2xl font-bold text-white">
-              {allocation.supplyTotal}
+              {Math.max(allocation.supplyTotal - allocation.winners.length, 0)}/{allocation.supplyTotal}
             </div>
           </div>
           <div className="bg-gray-800 rounded-lg p-4">
@@ -194,19 +194,15 @@ export default function ResultsPage({ params }: PageProps) {
                     {(Number(BigInt(tt.priceSompi)) / 100_000_000).toFixed(2)} KAS
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Supply</span>
-                    <span className="text-white">{tt.supply}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Claimed</span>
                     <span className={tt.remaining === 0 ? 'text-red-400' : 'text-green-400'}>
                       {tt.minted ?? 0}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Remaining</span>
+                    <span className="text-gray-400">Supply</span>
                     <span className={tt.remaining === 0 ? 'text-red-400 font-bold' : 'text-white'}>
-                      {tt.remaining === 0 ? 'SOLD OUT' : tt.remaining}
+                      {tt.remaining ?? tt.supply}/{tt.supply}
                     </span>
                   </div>
                 </div>

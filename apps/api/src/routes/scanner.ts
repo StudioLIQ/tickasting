@@ -22,6 +22,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
   // Issue ticket for a winner
   const issueTicketSchema = z.object({
     ownerAddress: z.string().min(1, 'ownerAddress is required'),
+    ticketTypeCode: z.string().min(1).optional(),
   })
 
   fastify.post<{ Params: { saleId: string; txid: string } }>(
@@ -35,13 +36,31 @@ export async function scannerRoutes(fastify: FastifyInstance) {
         return { error: 'Validation failed', details: parseResult.error.flatten() }
       }
 
-      const { ownerAddress } = parseResult.data
+      const { ownerAddress, ticketTypeCode } = parseResult.data
 
       // Check sale exists
-      const sale = await prisma.sale.findUnique({ where: { id: saleId } })
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId },
+        include: { ticketTypes: true },
+      })
       if (!sale) {
         reply.status(404)
         return { error: 'Sale not found' }
+      }
+
+      let resolvedTicketTypeId: string | null = null
+      if (ticketTypeCode) {
+        const matched = sale.ticketTypes.find((tt) => tt.code === ticketTypeCode)
+        if (!matched) {
+          reply.status(400)
+          return { error: `Unknown ticket type code '${ticketTypeCode}'` }
+        }
+        resolvedTicketTypeId = matched.id
+      } else if (sale.ticketTypes.length === 1) {
+        const onlyType = sale.ticketTypes[0]
+        if (onlyType) {
+          resolvedTicketTypeId = onlyType.id
+        }
       }
 
       let buyerAddrHash = ''
@@ -105,6 +124,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
       const ticket = await prisma.ticket.create({
         data: {
           saleId,
+          ticketTypeId: resolvedTicketTypeId,
           ownerAddress,
           ownerAddrHash: buyerAddrHash || computeBuyerAddrHash(ownerAddress.toLowerCase()),
           originTxid: txid,
@@ -246,15 +266,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     // Decode and verify signature
     const decoded = decodeTicketQR(qrCode, TICKET_SECRET)
     if (!decoded.valid || !decoded.data) {
-      // Log failed scan attempt
-      await prisma.scan.create({
-        data: {
-          ticketId: '00000000-0000-0000-0000-000000000000', // Placeholder for invalid
-          gateId,
-          operatorId,
-          result: 'deny_invalid_ticket',
-        },
-      }).catch(() => {})
+      // Invalid QR has no ticketId; skip DB write because scans.ticket_id is required.
 
       return {
         success: false,
@@ -346,6 +358,61 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // List tickets by owner address (for buyer portal)
+  const listTicketsSchema = z.object({
+    ownerAddress: z.string().min(1, 'ownerAddress is required'),
+    saleId: z.string().optional(),
+    status: z.enum(['issued', 'redeemed', 'cancelled']).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  })
+
+  fastify.get('/v1/tickets', async (request, reply) => {
+    const parseResult = listTicketsSchema.safeParse(request.query)
+    if (!parseResult.success) {
+      reply.status(400)
+      return { error: 'Validation failed', details: parseResult.error.flatten() }
+    }
+
+    const { ownerAddress, saleId, status, limit } = parseResult.data
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        ownerAddress: { equals: ownerAddress, mode: 'insensitive' },
+        ...(saleId ? { saleId } : {}),
+        ...(status ? { status } : {}),
+      },
+      include: {
+        sale: {
+          include: { event: true },
+        },
+        ticketType: true,
+      },
+      orderBy: { issuedAt: 'desc' },
+      take: limit,
+    })
+
+    return {
+      ownerAddress: ownerAddress.toLowerCase(),
+      total: tickets.length,
+      tickets: tickets.map((ticket) => ({
+        id: ticket.id,
+        saleId: ticket.saleId,
+        saleStatus: ticket.sale.status,
+        eventTitle: ticket.sale.event.title,
+        ticketTypeCode: ticket.ticketType?.code ?? null,
+        ticketTypeName: ticket.ticketType?.name ?? null,
+        ownerAddress: ticket.ownerAddress,
+        originTxid: ticket.originTxid,
+        claimTxid: ticket.claimTxid,
+        tokenId: ticket.tokenId,
+        status: ticket.status,
+        issuedAt: ticket.issuedAt.toISOString(),
+        redeemedAt: ticket.redeemedAt?.toISOString() ?? null,
+        metadata: buildTicketMetadataSummary(ticket),
+      })),
+    }
+  })
+
   // Get ticket by ID
   fastify.get<{ Params: { ticketId: string } }>(
     '/v1/tickets/:ticketId',
@@ -358,6 +425,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
           sale: {
             include: { event: true },
           },
+          ticketType: true,
           scans: {
             orderBy: { scannedAt: 'desc' },
             take: 5,
@@ -382,11 +450,18 @@ export async function scannerRoutes(fastify: FastifyInstance) {
         id: ticket.id,
         saleId: ticket.saleId,
         eventTitle: ticket.sale.event.title,
+        ticketTypeCode: ticket.ticketType?.code ?? null,
+        ticketTypeName: ticket.ticketType?.name ?? null,
+        ownerAddress: ticket.ownerAddress,
+        ownerAddrHash: ticket.ownerAddrHash,
+        tokenId: ticket.tokenId,
+        claimTxid: ticket.claimTxid,
         originTxid: ticket.originTxid,
         status: ticket.status,
         issuedAt: ticket.issuedAt.toISOString(),
         redeemedAt: ticket.redeemedAt?.toISOString() ?? null,
         qrCode,
+        metadata: buildTicketNftMetadata(ticket),
         recentScans: ticket.scans.map((s) => ({
           scannedAt: s.scannedAt.toISOString(),
           result: s.result,
@@ -395,4 +470,204 @@ export async function scannerRoutes(fastify: FastifyInstance) {
       }
     }
   )
+
+  // Get ticket metadata (NFT style)
+  fastify.get<{ Params: { ticketId: string } }>(
+    '/v1/tickets/:ticketId/metadata',
+    async (request, reply) => {
+      const { ticketId } = request.params
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          sale: {
+            include: { event: true },
+          },
+          ticketType: true,
+        },
+      })
+
+      if (!ticket) {
+        reply.status(404)
+        return { error: 'Ticket not found' }
+      }
+
+      return buildTicketNftMetadata(ticket)
+    }
+  )
+}
+
+interface TicketNftAttribute {
+  trait_type: string
+  value: string | number | boolean
+}
+
+interface TicketMetadataSummary {
+  performanceTitle: string
+  performanceDate: string | null
+  performanceEndDate: string | null
+  venue: string | null
+  seat: string
+}
+
+interface TicketNftMetadata {
+  name: string
+  description: string
+  image: string | null
+  external_url: string | null
+  attributes: TicketNftAttribute[]
+  properties: {
+    ticketId: string
+    saleId: string
+    ownerAddress: string
+    ownerAddrHash: string
+    originTxid: string
+    claimTxid: string | null
+    tokenId: string | null
+    ticketTypeCode: string | null
+    ticketTypeName: string | null
+    performanceTitle: string
+    performanceDate: string | null
+    performanceEndDate: string | null
+    venue: string | null
+    seat: string
+    status: string
+  }
+}
+
+interface TicketWithMetadataContext {
+  id: string
+  saleId: string
+  ownerAddress: string
+  ownerAddrHash: string
+  originTxid: string
+  claimTxid: string | null
+  tokenId: string | null
+  status: string
+  issuedAt: Date
+  redeemedAt: Date | null
+  sale: {
+    status: string
+    event: {
+      title: string
+      venue: string | null
+      startAt: Date | null
+      endAt: Date | null
+    }
+  }
+  ticketType: {
+    code: string
+    name: string
+    metadataUri: string | null
+    perk: unknown
+  } | null
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function asText(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return null
+}
+
+function readPerkField(perk: unknown, keys: string[]): string | null {
+  const obj = asObject(perk)
+  if (!obj) return null
+  for (const key of keys) {
+    const value = asText(obj[key])
+    if (value) return value
+  }
+  return null
+}
+
+function buildSeatLabel(ticketType: TicketWithMetadataContext['ticketType']): string {
+  if (!ticketType) return 'General Admission'
+
+  const explicitSeat = readPerkField(ticketType.perk, ['seat', 'seatLabel'])
+  if (explicitSeat) return explicitSeat
+
+  const section = readPerkField(ticketType.perk, ['section'])
+  const row = readPerkField(ticketType.perk, ['row'])
+  const number = readPerkField(ticketType.perk, ['seatNumber', 'number'])
+  const parts = [section && `Section ${section}`, row && `Row ${row}`, number && `Seat ${number}`].filter(
+    Boolean
+  ) as string[]
+
+  return parts.length > 0 ? parts.join(' / ') : 'General Admission'
+}
+
+function buildTicketMetadataSummary(ticket: TicketWithMetadataContext): TicketMetadataSummary {
+  return {
+    performanceTitle: ticket.sale.event.title,
+    performanceDate: ticket.sale.event.startAt?.toISOString() ?? null,
+    performanceEndDate: ticket.sale.event.endAt?.toISOString() ?? null,
+    venue: ticket.sale.event.venue ?? null,
+    seat: buildSeatLabel(ticket.ticketType),
+  }
+}
+
+function buildTicketNftMetadata(ticket: TicketWithMetadataContext): TicketNftMetadata {
+  const summary = buildTicketMetadataSummary(ticket)
+  const ticketTypeName = ticket.ticketType?.name ?? 'Ticket'
+  const ticketTypeCode = ticket.ticketType?.code ?? null
+  const tokenDisplay = ticket.tokenId ?? ticket.id.slice(0, 8)
+  const eventDateText = summary.performanceDate
+    ? new Date(summary.performanceDate).toISOString()
+    : 'TBA'
+  const venueText = summary.venue ?? 'TBA'
+
+  const attributes: TicketNftAttribute[] = [
+    { trait_type: 'Performance', value: summary.performanceTitle },
+    { trait_type: 'Performance Date', value: eventDateText },
+    { trait_type: 'Venue', value: venueText },
+    { trait_type: 'Seat', value: summary.seat },
+    { trait_type: 'Ticket Type', value: ticketTypeName },
+    { trait_type: 'Sale Status', value: ticket.sale.status },
+    { trait_type: 'Ticket Status', value: ticket.status },
+    { trait_type: 'Issued At', value: ticket.issuedAt.toISOString() },
+  ]
+
+  if (ticketTypeCode) {
+    attributes.push({ trait_type: 'Ticket Type Code', value: ticketTypeCode })
+  }
+  if (ticket.tokenId) {
+    attributes.push({ trait_type: 'Token ID', value: ticket.tokenId })
+  }
+  if (ticket.redeemedAt) {
+    attributes.push({ trait_type: 'Redeemed At', value: ticket.redeemedAt.toISOString() })
+  }
+
+  return {
+    name: `${summary.performanceTitle} - ${ticketTypeName} #${tokenDisplay}`,
+    description: `NFT ticket for ${summary.performanceTitle} (${venueText}) on ${eventDateText}.`,
+    image: ticket.ticketType?.metadataUri ?? null,
+    external_url: null,
+    attributes,
+    properties: {
+      ticketId: ticket.id,
+      saleId: ticket.saleId,
+      ownerAddress: ticket.ownerAddress,
+      ownerAddrHash: ticket.ownerAddrHash,
+      originTxid: ticket.originTxid,
+      claimTxid: ticket.claimTxid,
+      tokenId: ticket.tokenId,
+      ticketTypeCode,
+      ticketTypeName,
+      performanceTitle: summary.performanceTitle,
+      performanceDate: summary.performanceDate,
+      performanceEndDate: summary.performanceEndDate,
+      venue: summary.venue,
+      seat: summary.seat,
+      status: ticket.status,
+    },
+  }
 }

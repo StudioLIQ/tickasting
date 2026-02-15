@@ -14,11 +14,11 @@ interface PaymentTransferRow {
   tx_hash: string
   from_address: string
   to_address: string
-  value: bigint
+  value: bigint | number | string | { toString(): string }
   block_hash: string
-  block_number: bigint
-  block_timestamp: bigint
-  log_index: bigint
+  block_number: bigint | number | string | { toString(): string }
+  block_timestamp: bigint | number | string | { toString(): string }
+  log_index: bigint | number | string | { toString(): string }
 }
 
 export interface EvmPurchaseAttempt {
@@ -67,6 +67,13 @@ function toConfirmations(currentBlock: bigint, blockNumber: bigint): number {
   const delta = currentBlock - blockNumber + 1n
   const cap = BigInt(Number.MAX_SAFE_INTEGER)
   return Number(delta > cap ? cap : delta)
+}
+
+function toBigInt(value: bigint | number | string | { toString(): string }): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number') return BigInt(Math.trunc(value))
+  if (typeof value === 'string') return BigInt(value)
+  return BigInt(value.toString())
 }
 
 async function getCurrentBlockNumber(): Promise<bigint> {
@@ -135,26 +142,31 @@ export async function getEvmSaleComputed(sale: Sale): Promise<EvmSaleComputed> {
 
   const baseAttempts: EvmPurchaseAttempt[] = rows
     .filter((row) => {
-      const blockTime = toDateFromUnixSeconds(row.block_timestamp)
+      const blockTimestamp = toBigInt(row.block_timestamp)
+      const blockTime = toDateFromUnixSeconds(blockTimestamp)
       if (sale.startAt && blockTime < sale.startAt) return false
       if (sale.endAt && blockTime > sale.endAt) return false
       return true
     })
     .map((row) => {
-      const valid = allowedAmounts.has(row.value.toString())
+      const amount = toBigInt(row.value)
+      const blockNumber = toBigInt(row.block_number)
+      const blockTimestamp = toBigInt(row.block_timestamp)
+      const logIndex = toBigInt(row.log_index)
+      const valid = allowedAmounts.has(amount.toString())
       return {
         txid: row.tx_hash.toLowerCase(),
         buyerAddress: row.from_address.toLowerCase(),
         buyerAddrHash: computeBuyerAddrHash(row.from_address.toLowerCase()),
-        amount: row.value,
+        amount,
         blockHash: row.block_hash.toLowerCase(),
-        blockNumber: row.block_number,
-        blockTimestamp: row.block_timestamp,
-        logIndex: row.log_index,
+        blockNumber,
+        blockTimestamp,
+        logIndex,
         validationStatus: valid ? 'valid' : 'invalid_wrong_amount',
-        invalidReason: valid ? null : `Amount mismatch: got ${row.value.toString()}`,
+        invalidReason: valid ? null : `Amount mismatch: got ${amount.toString()}`,
         accepted: true,
-        confirmations: toConfirmations(currentBlock, row.block_number),
+        confirmations: toConfirmations(currentBlock, blockNumber),
         provisionalRank: null,
         finalRank: null,
       }

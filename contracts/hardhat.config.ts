@@ -3,7 +3,6 @@ import '@nomicfoundation/hardhat-toolbox'
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || '0x' + '0'.repeat(64)
 const CONTRACT_RPC_URL = process.env.CONTRACT_RPC_URL || ''
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || ''
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -22,9 +21,6 @@ const config: HardhatUserConfig = {
       accounts: DEPLOYER_PRIVATE_KEY !== '0x' + '0'.repeat(64) ? [DEPLOYER_PRIVATE_KEY] : [],
       chainId: 167012,
     },
-  },
-  etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
   },
   paths: {
     sources: './contracts',

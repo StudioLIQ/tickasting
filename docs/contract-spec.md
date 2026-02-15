@@ -277,7 +277,6 @@ function _verifyProof(
 CONTRACT_NETWORK=kasplex-testnet
 CONTRACT_RPC_URL=https://rpc.kasplextest.xyz
 DEPLOYER_PRIVATE_KEY=<deployer-private-key>
-ETHERSCAN_API_KEY=<for-verification>
 
 # Deployed contract address (after deployment)
 TICKASTING_CONTRACT_ADDRESS=0x...

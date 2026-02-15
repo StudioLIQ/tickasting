@@ -1,13 +1,9 @@
 import { Hono } from "hono";
 import { db } from "ponder:api";
-import { graphql } from "ponder";
 import * as schema from "ponder:schema";
 import { eq } from "ponder";
 
 const app = new Hono();
-
-// Auto-generated GraphQL API
-app.use("/graphql", graphql({ db, schema }));
 
 // Custom REST endpoint: sale by ID
 app.get("/sales/:saleId", async (c) => {

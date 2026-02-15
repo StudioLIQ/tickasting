@@ -72,10 +72,23 @@ export interface SaleStats {
   timestamp: string
 }
 
+export interface SalesListResponse {
+  sales: Sale[]
+}
+
 export async function getSale(saleId: string): Promise<Sale> {
   const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}`)
   if (!res.ok) {
     throw new Error(`Failed to fetch sale: ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function getSales(eventId?: string): Promise<SalesListResponse> {
+  const query = eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''
+  const res = await fetch(`${config.apiBaseUrl}/v1/sales${query}`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch sales: ${res.status}`)
   }
   return res.json()
 }
@@ -194,6 +207,128 @@ export async function getClaimStatus(saleId: string): Promise<ClaimStatusRespons
   const res = await fetch(`${config.apiBaseUrl}/v1/sales/${saleId}/claims`)
   if (!res.ok) {
     throw new Error(`Failed to fetch claim status: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface MyTicket {
+  id: string
+  saleId: string
+  saleStatus: string
+  eventTitle: string
+  ticketTypeCode: string | null
+  ticketTypeName: string | null
+  ownerAddress: string
+  originTxid: string
+  claimTxid: string | null
+  tokenId: string | null
+  status: string
+  issuedAt: string
+  redeemedAt: string | null
+  metadata: TicketMetadataSummary
+}
+
+export interface MyTicketsResponse {
+  ownerAddress: string
+  total: number
+  tickets: MyTicket[]
+}
+
+export async function getMyTickets(
+  ownerAddress: string,
+  options: {
+    saleId?: string
+    status?: 'issued' | 'redeemed' | 'cancelled'
+    limit?: number
+  } = {}
+): Promise<MyTicketsResponse> {
+  const query = new URLSearchParams({
+    ownerAddress,
+  })
+  if (options.saleId) query.set('saleId', options.saleId)
+  if (options.status) query.set('status', options.status)
+  if (options.limit) query.set('limit', String(options.limit))
+
+  const res = await fetch(`${config.apiBaseUrl}/v1/tickets?${query.toString()}`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch tickets: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface TicketDetail {
+  id: string
+  saleId: string
+  eventTitle: string
+  ticketTypeCode: string | null
+  ticketTypeName: string | null
+  ownerAddress: string
+  ownerAddrHash: string
+  tokenId: string | null
+  claimTxid: string | null
+  originTxid: string
+  status: string
+  issuedAt: string
+  redeemedAt: string | null
+  qrCode: string
+  metadata: TicketNftMetadata
+  recentScans: Array<{
+    scannedAt: string
+    result: string
+    gateId: string | null
+  }>
+}
+
+export async function getTicket(ticketId: string): Promise<TicketDetail> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/tickets/${ticketId}`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ticket: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface TicketMetadataSummary {
+  performanceTitle: string
+  performanceDate: string | null
+  performanceEndDate: string | null
+  venue: string | null
+  seat: string
+}
+
+export interface TicketMetadataAttribute {
+  trait_type: string
+  value: string | number | boolean
+}
+
+export interface TicketNftMetadata {
+  name: string
+  description: string
+  image: string | null
+  external_url: string | null
+  attributes: TicketMetadataAttribute[]
+  properties: {
+    ticketId: string
+    saleId: string
+    ownerAddress: string
+    ownerAddrHash: string
+    originTxid: string
+    claimTxid: string | null
+    tokenId: string | null
+    ticketTypeCode: string | null
+    ticketTypeName: string | null
+    performanceTitle: string
+    performanceDate: string | null
+    performanceEndDate: string | null
+    venue: string | null
+    seat: string
+    status: string
+  }
+}
+
+export async function getTicketMetadata(ticketId: string): Promise<TicketNftMetadata> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/tickets/${ticketId}/metadata`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ticket metadata: ${res.status}`)
   }
   return res.json()
 }

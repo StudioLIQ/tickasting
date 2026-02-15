@@ -6,6 +6,7 @@ interface EvmProvider {
   request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>
   on?: (event: string, handler: (data: unknown) => void) => void
   removeListener?: (event: string, handler: (data: unknown) => void) => void
+  isMetaMask?: boolean
 }
 
 declare global {
@@ -31,6 +32,13 @@ function encodeErc20Transfer(to: string, amount: bigint): string {
   return `0x${methodId}${toArg}${valueArg}`
 }
 
+function getMetaMaskProvider(): EvmProvider | null {
+  if (typeof window === 'undefined') return null
+  const provider = window.ethereum
+  if (!provider || provider.isMetaMask !== true) return null
+  return provider
+}
+
 export interface UseEvmWalletResult {
   isInstalled: boolean
   isConnected: boolean
@@ -53,15 +61,16 @@ export function useEvmWallet(): UseEvmWalletResult {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setIsInstalled(typeof window !== 'undefined' && !!window.ethereum)
+    setIsInstalled(getMetaMaskProvider() !== null)
   }, [])
 
   const syncWalletState = useCallback(async () => {
-    if (!window.ethereum) return
+    const provider = getMetaMaskProvider()
+    if (!provider) return
 
     const [accountsRaw, chainIdRaw] = await Promise.all([
-      window.ethereum.request({ method: 'eth_accounts' }),
-      window.ethereum.request({ method: 'eth_chainId' }),
+      provider.request({ method: 'eth_accounts' }),
+      provider.request({ method: 'eth_chainId' }),
     ])
     const accounts = accountsRaw as string[]
     const chainIdHex = chainIdRaw as string
@@ -73,14 +82,15 @@ export function useEvmWallet(): UseEvmWalletResult {
   }, [])
 
   const connect = useCallback(async () => {
-    if (!window.ethereum) {
-      setError('MetaMask not detected')
+    const provider = getMetaMaskProvider()
+    if (!provider) {
+      setError('MetaMask is required')
       return
     }
     setLoading(true)
     setError(null)
     try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' })
+      await provider.request({ method: 'eth_requestAccounts' })
       await syncWalletState()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect wallet')
@@ -95,11 +105,13 @@ export function useEvmWallet(): UseEvmWalletResult {
   }, [])
 
   const ensureKasplexChain = useCallback(async () => {
-    if (!window.ethereum) throw new Error('MetaMask not detected')
-    const chainIdRaw = (await window.ethereum.request({ method: 'eth_chainId' })) as string
+    const provider = getMetaMaskProvider()
+    if (!provider) throw new Error('MetaMask is required')
+
+    const chainIdRaw = (await provider.request({ method: 'eth_chainId' })) as string
     if (parseInt(chainIdRaw, 16) === KASPLEX_CHAIN_ID) return
 
-    await window.ethereum.request({
+    await provider.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: KASPLEX_CHAIN_ID_HEX }],
     })
@@ -108,7 +120,8 @@ export function useEvmWallet(): UseEvmWalletResult {
 
   const sendUsdcTransfer = useCallback(
     async (toAddress: string, amount: bigint): Promise<string> => {
-      if (!window.ethereum) throw new Error('MetaMask not detected')
+      const provider = getMetaMaskProvider()
+      if (!provider) throw new Error('MetaMask is required')
       if (!address) throw new Error('Wallet not connected')
       if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) {
         throw new Error('Invalid EVM treasury address')
@@ -116,7 +129,7 @@ export function useEvmWallet(): UseEvmWalletResult {
       await ensureKasplexChain()
 
       const data = encodeErc20Transfer(toAddress, amount)
-      const txHash = (await window.ethereum.request({
+      const txHash = (await provider.request({
         method: 'eth_sendTransaction',
         params: [
           {
@@ -134,7 +147,9 @@ export function useEvmWallet(): UseEvmWalletResult {
   )
 
   useEffect(() => {
-    if (!window.ethereum) return
+    const provider = getMetaMaskProvider()
+    if (!provider) return
+
     void syncWalletState()
 
     const handleAccountsChanged = (accounts: unknown) => {
@@ -147,11 +162,11 @@ export function useEvmWallet(): UseEvmWalletResult {
       setChainId(Number.isFinite(parsed) ? parsed : null)
     }
 
-    window.ethereum.on?.('accountsChanged', handleAccountsChanged)
-    window.ethereum.on?.('chainChanged', handleChainChanged)
+    provider.on?.('accountsChanged', handleAccountsChanged)
+    provider.on?.('chainChanged', handleChainChanged)
     return () => {
-      window.ethereum?.removeListener?.('accountsChanged', handleAccountsChanged)
-      window.ethereum?.removeListener?.('chainChanged', handleChainChanged)
+      provider.removeListener?.('accountsChanged', handleAccountsChanged)
+      provider.removeListener?.('chainChanged', handleChainChanged)
     }
   }, [syncWalletState])
 

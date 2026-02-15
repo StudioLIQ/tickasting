@@ -1,6 +1,13 @@
 import { createConfig } from "ponder";
+import { config as loadEnv } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ERC20Abi } from "./abis/ERC20Abi";
 import { TickastingSaleAbi } from "./abis/TickastingSaleAbi";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: resolve(__dirname, "../../.env") });
+loadEnv({ path: resolve(__dirname, "../../.env.local"), override: true });
 
 const KASPLEX_TESTNET_CHAIN_ID = 167012;
 const PONDER_RPC_URL = process.env.PONDER_RPC_URL_167012;

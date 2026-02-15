@@ -92,6 +92,13 @@ PAYMENT_CHAIN=kasplex-testnet
 USE_PONDER_DATA=true
 ```
 
+Vercel production (`apps/web`) values:
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://api-tickasting.studioliq.com
+NEXT_PUBLIC_WS_URL=wss://api-tickasting.studioliq.com # optional, auto-derived if omitted
+```
+
 ### 5) Run services
 
 Terminal 1:
@@ -246,7 +253,7 @@ Commonly used variables:
 - `DATABASE_URL` Postgres DSN
 - `API_HOST`, `API_PORT` API listen config
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
-- `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets
+- `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)
 - `NEXT_PUBLIC_EVM_EXPLORER_URL` web explorer base URL for tx/block links
 - `NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS`, `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL`, `NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS`
 - `NEXT_PUBLIC_KASPLEX_CHAIN_ID` expected chain id for wallet UX

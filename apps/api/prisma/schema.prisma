@@ -1,5 +1,4 @@
 // Tickasting Prisma Schema
-// Reference: PROJECT.md Section 13
 
 generator client {
   provider = "prisma-client-js"

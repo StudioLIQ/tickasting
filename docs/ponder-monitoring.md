@@ -162,7 +162,7 @@ DROP TABLE IF EXISTS _ponder_reorg CASCADE;
 
 | Parameter | Default | Recommendation |
 |-----------|---------|----------------|
-| `pollingInterval` | 1000ms | 2000ms for Sepolia (plenty fast) |
-| `ethGetLogsBlockRange` | auto | Leave auto for Sepolia |
+| `pollingInterval` | 1000ms | 2000ms for Kasplex testnet (plenty fast) |
+| `ethGetLogsBlockRange` | auto | Leave auto for Kasplex testnet |
 | Postgres `max_connections` | 100 | Ensure room for Ponder + API |
 | `TICKASTING_START_BLOCK` | 0 | Set to deploy block number |

@@ -19,7 +19,7 @@ Tickasting runs with a single indexing layer:
 
 - `apps/ponder`: EVM event indexing for payment + claim data
 
-Details: `docs/architecture.md`, `docs/migration-ponder.md`
+Details: `docs/architecture.md`
 
 ## Monorepo Structure
 
@@ -290,6 +290,13 @@ pnpm env:sync:vercel
 pnpm env:sync:railway
 pnpm env:sync:dry-run
 ```
+
+## Docs
+
+- `docs/architecture.md`
+- `docs/audit.md`
+- `docs/contract-spec.md`
+- `docs/ponder-monitoring.md`
 
 ## Testing
 

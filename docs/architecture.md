@@ -1,6 +1,6 @@
 # Architecture Decision Record: Runtime Topology
 
-> Status: **Accepted** (Updated 2026-02-16)
+> Status: **Accepted** (Updated 2026-02-15)
 
 ## Context
 
@@ -37,7 +37,7 @@ Contract         Kasplex EVM     TickastingSale claim/mint contract
 ## Removed Component
 
 - `apps/indexer` was removed after migration completion.
-- Any legacy Kaspa polling path is no longer part of runtime deployment.
+- Any legacy non-EVM polling path is no longer part of runtime deployment.
 
 ## Consequences
 

@@ -406,7 +406,7 @@ export default function SalePage({ params }: PageProps) {
                     <div className="mt-4 p-4 bg-green-900/20 border border-green-700 rounded">
                       <div className="font-semibold text-green-400 mb-2">You won! Claim your ticket</div>
                       <p className="text-xs text-gray-400 mb-3">
-                        Connect MetaMask to claim your ERC-721 ticket on Sepolia.
+                        Connect MetaMask to claim your ERC-721 ticket on Kasplex testnet.
                         Contract: {sale.claimContractAddress}
                       </p>
                       <button
@@ -417,7 +417,7 @@ export default function SalePage({ params }: PageProps) {
                           )
                         }}
                       >
-                        Claim Ticket on Sepolia
+                        Claim Ticket on Kasplex
                       </button>
                     </div>
                   )}
@@ -446,7 +446,7 @@ export default function SalePage({ params }: PageProps) {
             <li>Your rank is determined by on-chain acceptance order</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
             {sale.claimContractAddress && (
-              <li>Winners claim their ERC-721 ticket on Sepolia via MetaMask</li>
+              <li>Winners claim their ERC-721 ticket on Kasplex testnet via MetaMask</li>
             )}
           </ol>
         </div>

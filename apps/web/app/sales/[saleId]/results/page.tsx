@@ -12,6 +12,13 @@ import {
   type TicketType,
 } from '@/lib/api'
 
+const KASPA_EXPLORER_BASE_URL =
+  (process.env.NEXT_PUBLIC_KASPA_EXPLORER_URL || 'https://explorer-tn10.kaspa.org').replace(/\/$/, '')
+
+function getKaspaTxUrl(txid: string): string {
+  return `${KASPA_EXPLORER_BASE_URL}/txs/${txid}`
+}
+
 interface PageProps {
   params: Promise<{ saleId: string }>
 }
@@ -331,7 +338,7 @@ export default function ResultsPage({ params }: PageProps) {
                   <span className="text-gray-400">Commit Transaction:</span>
                   <div className="font-mono text-xs mt-1">
                     <a
-                      href={`https://kas.fyi/transaction/${allocation.commitTxid}`}
+                      href={getKaspaTxUrl(allocation.commitTxid)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-kaspa-primary hover:underline break-all"

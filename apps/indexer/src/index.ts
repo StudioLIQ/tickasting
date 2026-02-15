@@ -13,7 +13,7 @@ import { createScannerLoop } from './scanner.js'
 import { PurchaseValidator } from './validator.js'
 import { createAcceptanceTrackerLoop } from './acceptance-tracker.js'
 import { createOrderingLoop } from './ordering.js'
-import { KasFyiAdapter } from '@tickasting/shared'
+import { KaspaOrgAdapter } from '@tickasting/shared'
 
 const PORT = parseInt(process.env['INDEXER_PORT'] || '4002', 10)
 const POLL_INTERVAL_MS = parseInt(process.env['INDEXER_POLL_INTERVAL_MS'] || '5000', 10)
@@ -40,9 +40,17 @@ async function main() {
 
   // Initialize Kaspa adapter
   const kaspaNetwork = process.env['KASPA_NETWORK'] as 'mainnet' | 'testnet' | undefined
-  const adapter = new KasFyiAdapter({
+  const requestedAdapter = (process.env['KASPA_ADAPTER'] || 'kaspaorg').toLowerCase()
+  const adapterName = 'kaspaorg'
+  if (requestedAdapter !== 'kaspaorg') {
+    fastify.log.warn(
+      { requestedAdapter },
+      'Only kaspa.org scanner is supported in this deployment. Falling back to kaspaorg.'
+    )
+  }
+  const adapter = new KaspaOrgAdapter({
     network: kaspaNetwork || 'testnet',
-    apiKey: process.env['KASFYI_API_KEY'],
+    baseUrl: process.env['KASPA_REST_BASE_URL'],
   })
 
   // Health check endpoint
@@ -71,6 +79,7 @@ async function main() {
       database: dbStatus,
       liveSalesCount,
       network: kaspaNetwork || 'testnet',
+      adapter: adapterName,
     }
   })
 

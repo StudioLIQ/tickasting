@@ -86,8 +86,10 @@ API_PORT=4001
 INDEXER_PORT=4002
 INDEXER_POLL_INTERVAL_MS=5000
 KASPA_NETWORK=testnet
+KASPA_REST_BASE_URL=https://api-tn10.kaspa.org
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
+NEXT_PUBLIC_KASPA_EXPLORER_URL=https://explorer-tn10.kaspa.org
 PAYMENT_CURRENCY=USDC
 PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
 PAYMENT_CHAIN=kasplex-testnet
@@ -250,8 +252,9 @@ Commonly used variables:
 - `API_HOST`, `API_PORT` API listen config
 - `INDEXER_PORT`, `INDEXER_POLL_INTERVAL_MS` indexer config
 - `KASPA_NETWORK` (`testnet` or `mainnet`)
-- `KASFYI_API_KEY`, `KASFYI_BASE_URL` Kaspa adapter config
+- `KASPA_REST_BASE_URL` Kaspa scanner REST endpoint (`https://api-tn10.kaspa.org` for testnet)
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets
+- `NEXT_PUBLIC_KASPA_EXPLORER_URL` web explorer base URL for tx/block links
 - `WS_BROADCAST_INTERVAL_MS` API websocket broadcast interval
 - `TICKET_SECRET` ticket QR signing secret
 - `USE_PONDER_DATA` API claim data source switch

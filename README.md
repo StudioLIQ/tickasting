@@ -74,6 +74,7 @@ In `.env`:
 DATABASE_URL=postgresql://tickasting:tickasting@localhost:5433/tickasting?schema=public
 API_HOST=0.0.0.0
 API_PORT=4001
+API_DATABASE_SCHEMA=api
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://tickasting.studioliq.com
 PURCHASE_MODE=evm
 NEXT_PUBLIC_API_URL=http://localhost:4001
@@ -254,6 +255,7 @@ Commonly used variables:
 
 - `DATABASE_URL` Postgres DSN
 - `API_HOST`, `API_PORT` API listen config (`PORT` is prioritized for container platforms)
+- `API_DATABASE_SCHEMA` API Prisma schema name (default `api` in start script)
 - `CORS_ORIGINS` comma-separated CORS allowlist for browser origins
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)

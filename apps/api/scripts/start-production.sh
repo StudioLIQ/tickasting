@@ -19,4 +19,18 @@ echo "[api] Using schema '${API_DATABASE_SCHEMA}'"
 # Prefer migration history, fallback to schema push for pre-existing DB states.
 prisma migrate deploy || prisma db push --skip-generate
 
+AUTO_DEMO_SEED="${AUTO_DEMO_SEED:-true}"
+if [ "$AUTO_DEMO_SEED" = "true" ]; then
+  SALES_COUNT="$(
+    node --input-type=module -e 'import { PrismaClient } from "@prisma/client"; const prisma = new PrismaClient(); const count = await prisma.sale.count(); await prisma.$disconnect(); process.stdout.write(String(count));'
+  )"
+
+  if [ "$SALES_COUNT" = "0" ]; then
+    echo "[api] No sales found. Running demo seed..."
+    pnpm --filter @tickasting/api db:seed || echo "[api] Demo seed failed; continuing startup."
+  else
+    echo "[api] Existing sales detected: ${SALES_COUNT}. Skip demo seed."
+  fi
+fi
+
 exec node dist/index.js

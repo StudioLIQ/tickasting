@@ -379,7 +379,14 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     const normalizedOwner = ownerAddress.toLowerCase()
 
     if (USE_PONDER_DATA && (await ponderTablesExist())) {
-      await syncOwnerTicketsFromPonder(normalizedOwner)
+      try {
+        await syncOwnerTicketsFromPonder(normalizedOwner)
+      } catch (error) {
+        request.log.warn(
+          { error, ownerAddress: normalizedOwner },
+          'Failed to sync owner tickets from ponder; falling back to API tickets only'
+        )
+      }
     }
 
     const tickets = await prisma.ticket.findMany({

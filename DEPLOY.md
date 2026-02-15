@@ -125,6 +125,7 @@ pnpm env:sync:railway
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
 - `API_HOST=0.0.0.0`
 - `API_DATABASE_SCHEMA=api`
+- `AUTO_DEMO_SEED=true` (데모 환경 권장: 세일이 없으면 1회 자동 시드)
 - `CORS_ORIGINS=https://tickasting.studioliq.com,https://www.tickasting.studioliq.com`
 - `TICKET_SECRET=<랜덤 긴 문자열>`
 - `PURCHASE_MODE=evm`

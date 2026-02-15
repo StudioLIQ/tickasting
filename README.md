@@ -253,7 +253,7 @@ curl -X POST http://localhost:4001/v1/sales/<saleId>/publish
 Commonly used variables:
 
 - `DATABASE_URL` Postgres DSN
-- `API_HOST`, `API_PORT` API listen config (`PORT` is also supported for container platforms)
+- `API_HOST`, `API_PORT` API listen config (`PORT` is prioritized for container platforms)
 - `CORS_ORIGINS` comma-separated CORS allowlist for browser origins
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)

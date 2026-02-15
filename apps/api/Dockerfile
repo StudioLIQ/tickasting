@@ -30,4 +30,4 @@ COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/node_modules ./node_modules
 
 EXPOSE 4001
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["pnpm", "--filter", "@tickasting/api", "start"]

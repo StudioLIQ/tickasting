@@ -83,7 +83,7 @@ pnpm --filter @tickasting/api db:generate \
 Start:
 
 ```bash
-API_HOST=0.0.0.0 API_PORT=${PORT:-4001} pnpm --filter @tickasting/api start
+API_HOST=0.0.0.0 pnpm --filter @tickasting/api start
 ```
 
 Railway 설정:
@@ -138,7 +138,7 @@ pnpm env:sync:railway
 
 선택:
 
-- `API_PORT=${PORT}` (보통 Start 커맨드에서 처리하므로 생략 가능)
+- `API_PORT=4001` (로컬 개발용; Railway는 `PORT`를 자동 제공하며 `PORT`가 우선 적용됨)
 
 ---
 

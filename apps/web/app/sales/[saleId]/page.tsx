@@ -17,6 +17,7 @@ import {
   PUBLIC_KASPLEX_CHAIN_ID,
   PUBLIC_PAYMENT_DECIMALS,
   PUBLIC_PAYMENT_SYMBOL,
+  PUBLIC_TICKASTING_CONTRACT_ADDRESS,
 } from '@/lib/public-runtime'
 
 interface PageProps {
@@ -26,6 +27,7 @@ interface PageProps {
 const PAYMENT_SYMBOL = PUBLIC_PAYMENT_SYMBOL
 const PAYMENT_DECIMALS = PUBLIC_PAYMENT_DECIMALS
 const KASPLEX_CHAIN_ID = PUBLIC_KASPLEX_CHAIN_ID
+const CLAIM_CONTRACT_ADDRESS_FALLBACK = PUBLIC_TICKASTING_CONTRACT_ADDRESS
 
 function shouldRetryAutoClaim(message: string): boolean {
   const normalized = message.toLowerCase()
@@ -191,15 +193,11 @@ export default function SalePage({ params }: PageProps) {
       if (!sale || !txid || !wallet.address) return
       if (!myStatus?.isWinner || !myStatus.finalRank) return
 
-      if (!sale.claimContractAddress) {
+      const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK
+      if (!claimContractAddress) {
         setClaimError('Claim contract is not configured for this sale yet')
         return
       }
-      if (!sale.merkleRoot) {
-        setClaimError('Claim is not open yet (Merkle root not committed)')
-        return
-      }
-      const claimContractAddress = sale.claimContractAddress
 
       const ticketTypeCode = purchaseTicketTypeCode || selectedType?.code
       if (!ticketTypeCode) {
@@ -264,7 +262,7 @@ export default function SalePage({ params }: PageProps) {
 
   useEffect(() => {
     if (!sale || !txid || !myStatus?.found || !myStatus.isWinner || !myStatus.finalRank) return
-    if (!sale.claimContractAddress || !sale.merkleRoot) return
+    if (!(sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK)) return
     if (claiming || claimTxHash) return
     if (autoClaimAttemptedTxRef.current === txid) return
 
@@ -314,8 +312,8 @@ export default function SalePage({ params }: PageProps) {
   const displayPrice = selectedType
     ? formatTokenAmount(BigInt(selectedType.priceSompi))
     : formatTokenAmount(BigInt(sale.ticketPriceSompi))
-  const claimContractAddress = sale.claimContractAddress
-  const claimEnabled = Boolean(sale.claimContractAddress && sale.merkleRoot)
+  const claimContractAddress = sale.claimContractAddress || CLAIM_CONTRACT_ADDRESS_FALLBACK || null
+  const claimEnabled = Boolean(claimContractAddress)
   const paymentStepState: PipelineState = txid ? 'done' : 'pending'
   const indexedStepState: PipelineState = myStatus?.found ? 'done' : 'active'
   const winnerStepState: PipelineState =
@@ -554,7 +552,7 @@ export default function SalePage({ params }: PageProps) {
                           : myStatus?.isWinner
                             ? claimEnabled
                               ? 'Auto-claim in progress'
-                              : 'Waiting for organizer to open claim'
+                              : 'Claim contract not configured'
                             : 'Only winners mint',
                     },
                   ].map((step) => (
@@ -613,12 +611,12 @@ export default function SalePage({ params }: PageProps) {
                   {myStatus.isWinner && (
                     <div className="mt-4 p-4 bg-green-900/20 border border-green-700 rounded">
                       <div className="font-semibold text-green-400 mb-2">
-                        You won! {claimEnabled ? 'NFT mint is running automatically.' : 'Claim will open soon.'}
+                        You won! {claimEnabled ? 'NFT mint is running automatically.' : 'Claim contract is missing.'}
                       </div>
                       <p className="text-xs text-gray-400 mb-3">
                         Winner is detected. {claimEnabled
                           ? 'The app automatically sends claim once proof is ready.'
-                          : 'Organizer has not opened claim yet (contract/merkle not ready).'}
+                          : 'Organizer must configure claim contract address first.'}
                         Contract: {claimContractAddress || 'not configured'}
                       </p>
                       {claiming && (
@@ -656,7 +654,7 @@ export default function SalePage({ params }: PageProps) {
                         className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded text-sm font-medium"
                         onClick={() => void handleClaim(false)}
                       >
-                        {claiming ? 'Claiming...' : claimTxHash ? 'Claim Again' : claimEnabled ? 'Claim Now' : 'Claim Not Open'}
+                        {claiming ? 'Claiming...' : claimTxHash ? 'Claim Again' : claimEnabled ? 'Claim Now' : 'Claim Not Configured'}
                       </button>
                     </div>
                   )}
@@ -677,7 +675,7 @@ export default function SalePage({ params }: PageProps) {
             <li>Send exact {PAYMENT_SYMBOL} amount to the EVM treasury address</li>
             <li>Your rank is determined by on-chain ordering (block/log order)</li>
             <li>Winners are finalized after {sale.finalityDepth} confirmations</li>
-            {claimEnabled && (
+            {claimContractAddress && (
               <li>Winners are auto-claimed on Kasplex when proof is ready</li>
             )}
             <li>Non-winner payments are not auto-rolled back on-chain (refund policy is organizer-managed)</li>

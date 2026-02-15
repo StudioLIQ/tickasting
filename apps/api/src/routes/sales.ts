@@ -9,7 +9,7 @@ import {
   type MerkleLeaf,
 } from '@tickasting/shared'
 
-// Re-implement allocation types locally (shared between api and indexer)
+// Allocation types shared in API responses
 interface AllocationWinner {
   finalRank: number
   txid: string

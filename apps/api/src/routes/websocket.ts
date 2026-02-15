@@ -226,7 +226,7 @@ async function getMyStatus(saleId: string, txid: string) {
   }
 }
 
-// Export for external use (e.g., indexer notifications)
+// Export for external use
 export function broadcastToSale(saleId: string, message: object) {
   const connections = saleConnections.get(saleId)
   if (!connections) return

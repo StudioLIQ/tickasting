@@ -15,10 +15,9 @@ Tickasting is a ticketing system designed to make queue ordering reproducible an
 
 ## Current Runtime Topology
 
-Tickasting runs with one active indexing layer:
+Tickasting runs with a single indexing layer:
 
 - `apps/ponder`: EVM event indexing for payment + claim data
-- `apps/indexer`: legacy service (not used in EVM purchase mode)
 
 Details: `docs/architecture.md`, `docs/migration-ponder.md`
 
@@ -28,7 +27,6 @@ Details: `docs/architecture.md`, `docs/migration-ponder.md`
 apps/
   web/       Next.js frontend
   api/       Fastify API + WebSocket + domain logic
-  indexer/   Legacy Kaspa scanner (deprecated)
   ponder/    EVM event indexer (payment/claims/ownership)
 contracts/   TickastingSale Solidity contract (Kasplex testnet)
 packages/
@@ -76,8 +74,6 @@ In `.env`:
 DATABASE_URL=postgresql://tickasting:tickasting@localhost:5433/tickasting?schema=public
 API_HOST=0.0.0.0
 API_PORT=4001
-INDEXER_PORT=4002
-INDEXER_POLL_INTERVAL_MS=5000
 PURCHASE_MODE=evm
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
@@ -235,7 +231,11 @@ curl -X POST http://localhost:4001/v1/sales/<saleId>/publish
 - `POST /v1/sales/:saleId/tickets/:txid/issue`
 - `POST /v1/scans/verify`
 - `POST /v1/scans/redeem`
+- `GET /v1/tickets?ownerAddress=...`
 - `GET /v1/tickets/:ticketId`
+- `GET /v1/tickets/:ticketId/metadata`
+- `PATCH /v1/tickets/:ticketId/transfer`
+- `PATCH /v1/tickets/:ticketId/cancel`
 
 ### Real-time
 

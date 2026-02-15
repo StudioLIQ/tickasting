@@ -236,18 +236,6 @@ export default function SalePage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-2">Wallet</h3>
-          <p className="text-sm text-gray-300">
-            Wallet connection, network status, and KAS/{PAYMENT_SYMBOL} balances are managed in the top navigation bar.
-          </p>
-          {wallet.isConnected && wallet.address && (
-            <div className="mt-3 text-xs text-gray-400">
-              Active wallet: <span className="font-mono text-gray-200">{wallet.address}</span>
-            </div>
-          )}
-        </div>
-
         {/* Purchase Section */}
         {!wallet.isConnected && sale.status === 'live' && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 text-sm text-yellow-200">

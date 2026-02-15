@@ -103,47 +103,35 @@ export default function Home() {
     <main className="min-h-screen p-4 sm:p-6">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="overflow-hidden rounded-2xl border border-gray-800 bg-gradient-to-r from-gray-900 via-[#111827] to-gray-900">
-          <div className="grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-8">
-            <div>
-              <div className="mb-4 flex items-center gap-3">
-                <Image src="/logo-mark.png" alt="Tickasting logo mark" width={56} height={56} priority />
-                <div>
-                  <h1 className="text-3xl font-bold text-white sm:text-4xl">
-                    <span className="text-kaspa-primary">Tick</span>asting
-                  </h1>
-                  <p className="text-sm text-gray-300 sm:text-base">
-                    Marketplace-style ticket browsing with on-chain purchase tracking.
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
-                  <div className="text-xs uppercase tracking-wide text-gray-500">All Sales</div>
-                  <div className="mt-1 text-xl font-semibold text-white">{sales.length}</div>
-                </div>
-                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
-                  <div className="text-xs uppercase tracking-wide text-gray-500">Live Now</div>
-                  <div className="mt-1 text-xl font-semibold text-white">{liveCount}</div>
-                </div>
-                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
-                  <div className="text-xs uppercase tracking-wide text-gray-500">Finalized</div>
-                  <div className="mt-1 text-xl font-semibold text-white">{finalizedCount}</div>
-                </div>
+          <div className="p-6 sm:p-8">
+            <div className="mb-4 flex items-center gap-3">
+              <Image src="/logo-mark.png" alt="Tickasting logo mark" width={56} height={56} priority />
+              <div>
+                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                  <span className="text-kaspa-primary">Tick</span>asting
+                </h1>
+                <p className="text-sm text-gray-300 sm:text-base">
+                  Marketplace-style ticket browsing with on-chain purchase tracking.
+                </p>
               </div>
             </div>
-            <div className="flex flex-wrap content-start gap-2 sm:w-48">
-              <Link
-                href="/my-tickets"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-2 text-center text-sm text-gray-100 hover:border-gray-500"
-              >
-                My Tickets
-              </Link>
-              <Link
-                href="/scanner"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-2 text-center text-sm text-gray-100 hover:border-gray-500"
-              >
-                Scanner
-              </Link>
+
+            <div className="flex flex-wrap gap-2 text-xs text-gray-300">
+              <span className="rounded-full border border-gray-700 bg-gray-900/60 px-3 py-1">
+                Total Sales: {sales.length}
+              </span>
+              <span className="rounded-full border border-gray-700 bg-gray-900/60 px-3 py-1">
+                Live: {liveCount}
+              </span>
+              <span className="rounded-full border border-gray-700 bg-gray-900/60 px-3 py-1">
+                Finalized: {finalizedCount}
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
+              <span className="rounded-full border border-gray-800 px-3 py-1">Deterministic ordering</span>
+              <span className="rounded-full border border-gray-800 px-3 py-1">Merkle proofs</span>
+              <span className="rounded-full border border-gray-800 px-3 py-1">Live queue</span>
             </div>
           </div>
         </header>

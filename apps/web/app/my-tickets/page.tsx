@@ -53,27 +53,11 @@ export default function MyTicketsPage() {
     <main className="min-h-screen p-6 sm:p-8">
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-white">My Tickets</h1>
-              <p className="text-sm text-gray-400">
-                Manage your NFT tickets and metadata (seat, performance, date).
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Link
-                href="/"
-                className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-gray-500"
-              >
-                Home
-              </Link>
-              <Link
-                href="/scanner"
-                className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-gray-500"
-              >
-                Scanner
-              </Link>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">My Tickets</h1>
+            <p className="text-sm text-gray-400">
+              Manage your NFT tickets and metadata (seat, performance, date).
+            </p>
           </div>
         </header>
 
@@ -88,11 +72,6 @@ export default function MyTicketsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg bg-gray-800 p-3 text-xs text-gray-300">
-                <span className="text-gray-500">Connected address: </span>
-                <span className="font-mono">{wallet.address}</span>
-              </div>
-
               <div className="grid gap-3 sm:grid-cols-3">
                 <select
                   value={statusFilter}

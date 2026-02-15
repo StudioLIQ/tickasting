@@ -101,6 +101,7 @@ export interface UseEvmWalletResult {
   loading: boolean
   error: string | null
   connect: () => Promise<void>
+  requestAccountSelection: () => Promise<void>
   disconnect: () => void
   refreshBalances: () => Promise<void>
   ensureKasplexChain: () => Promise<void>
@@ -219,13 +220,39 @@ export function useEvmWallet(): UseEvmWalletResult {
     }
   }, [syncWalletState])
 
+  const requestAccountSelection = useCallback(async () => {
+    const provider = getInjectedProvider()
+    if (!provider) {
+      setError('EVM wallet is required')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await provider.request({
+        method: 'wallet_requestPermissions',
+        params: [{ eth_accounts: {} }],
+      }).catch(() => null)
+      await provider.request({ method: 'eth_requestAccounts' })
+      await syncWalletState()
+      emitWalletSyncEvent()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to switch wallet')
+    } finally {
+      setLoading(false)
+    }
+  }, [syncWalletState])
+
   const disconnect = useCallback(() => {
     setIsConnected(false)
     setAddress(null)
+    setChainId(null)
     setWalletLabel(null)
     setKasBalanceWei(null)
     setUsdcBalanceRaw(null)
     setBalanceError(null)
+    setError(null)
+    emitWalletSyncEvent()
   }, [])
 
   const ensureKasplexChain = useCallback(async () => {
@@ -351,6 +378,7 @@ export function useEvmWallet(): UseEvmWalletResult {
     loading,
     error,
     connect,
+    requestAccountSelection,
     disconnect,
     refreshBalances,
     ensureKasplexChain,

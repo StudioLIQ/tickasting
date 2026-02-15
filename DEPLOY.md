@@ -124,6 +124,7 @@ pnpm env:sync:railway
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
 - `API_HOST=0.0.0.0`
+- `CORS_ORIGINS=https://tickasting.studioliq.com,https://www.tickasting.studioliq.com`
 - `TICKET_SECRET=<랜덤 긴 문자열>`
 - `PURCHASE_MODE=evm`
 - `USE_PONDER_DATA=true`

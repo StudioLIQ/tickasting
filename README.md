@@ -252,6 +252,7 @@ Commonly used variables:
 
 - `DATABASE_URL` Postgres DSN
 - `API_HOST`, `API_PORT` API listen config
+- `CORS_ORIGINS` comma-separated CORS allowlist for browser origins
 - `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets (`NEXT_PUBLIC_WS_URL` is optional if API URL is set)
 - `NEXT_PUBLIC_EVM_EXPLORER_URL` web explorer base URL for tx/block links

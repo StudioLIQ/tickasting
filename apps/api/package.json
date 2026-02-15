@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm --filter @tickasting/shared build && prisma generate && tsc",
     "dev": "tsx watch src/index.ts",
-    "start": "prisma migrate deploy && node dist/index.js",
+    "start": "sh -c '(prisma migrate deploy || prisma db push --skip-generate) && node dist/index.js'",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

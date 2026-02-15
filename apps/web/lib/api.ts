@@ -293,6 +293,7 @@ export interface TicketMetadataSummary {
   performanceEndDate: string | null
   venue: string | null
   seat: string
+  image: string | null
 }
 
 export interface TicketMetadataAttribute {
@@ -331,4 +332,50 @@ export async function getTicketMetadata(ticketId: string): Promise<TicketNftMeta
     throw new Error(`Failed to fetch ticket metadata: ${res.status}`)
   }
   return res.json()
+}
+
+export interface TicketMutationResponse {
+  message: string
+  ticket: {
+    id: string
+    saleId: string
+    ownerAddress: string
+    status: string
+    updatedAt: string
+    reason?: string | null
+  }
+}
+
+export async function transferTicket(
+  ticketId: string,
+  toAddress: string
+): Promise<TicketMutationResponse> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/tickets/${ticketId}/transfer`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ toAddress }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const message = body?.error ? String(body.error) : `Failed to transfer ticket: ${res.status}`
+    throw new Error(message)
+  }
+  return body
+}
+
+export async function cancelTicket(
+  ticketId: string,
+  reason?: string
+): Promise<TicketMutationResponse> {
+  const res = await fetch(`${config.apiBaseUrl}/v1/tickets/${ticketId}/cancel`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const message = body?.error ? String(body.error) : `Failed to cancel ticket: ${res.status}`
+    throw new Error(message)
+  }
+  return body
 }

@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
+import Image from 'next/image'
 import { getSales, type Sale } from '@/lib/api'
+
+type SaleStatusFilter = 'all' | 'live' | 'scheduled' | 'finalizing' | 'finalized'
 
 const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
 const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
@@ -20,13 +22,45 @@ function formatDate(iso: string | null | undefined): string {
   if (!iso) return 'TBA'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return 'TBA'
-  return date.toLocaleString()
+  return date.toLocaleDateString()
+}
+
+function getSaleImage(sale: Sale): string | null {
+  return sale.ticketTypes?.find((tt) => tt.metadataUri)?.metadataUri ?? null
+}
+
+function getPriceRangeLabel(sale: Sale): string {
+  if (!sale.ticketTypes || sale.ticketTypes.length === 0) {
+    return `${formatTokenAmount(BigInt(sale.ticketPriceSompi))} ${PAYMENT_SYMBOL}`
+  }
+  const prices = sale.ticketTypes.map((tt) => BigInt(tt.priceSompi))
+  const minPrice = prices.reduce((min, price) => (price < min ? price : min), prices[0] || 0n)
+  const maxPrice = prices.reduce((max, price) => (price > max ? price : max), prices[0] || 0n)
+  if (minPrice === maxPrice) {
+    return `${formatTokenAmount(minPrice)} ${PAYMENT_SYMBOL}`
+  }
+  return `${formatTokenAmount(minPrice)} - ${formatTokenAmount(maxPrice)} ${PAYMENT_SYMBOL}`
+}
+
+function statusClassName(status: string): string {
+  switch (status) {
+    case 'live':
+      return 'bg-green-500/20 text-green-300 border-green-400/40'
+    case 'finalized':
+      return 'bg-blue-500/20 text-blue-300 border-blue-400/40'
+    case 'finalizing':
+      return 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'
+    default:
+      return 'bg-gray-700/60 text-gray-300 border-gray-500/40'
+  }
 }
 
 export default function Home() {
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [statusFilter, setStatusFilter] = useState<SaleStatusFilter>('all')
 
   useEffect(() => {
     let cancelled = false
@@ -34,17 +68,13 @@ export default function Home() {
     async function loadSales() {
       try {
         const data = await getSales()
-        if (!cancelled) {
-          setSales(data.sales)
-        }
+        if (!cancelled) setSales(data.sales)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load sales')
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        if (!cancelled) setLoading(false)
       }
     }
 
@@ -54,149 +84,192 @@ export default function Home() {
     }
   }, [])
 
-  const liveSales = useMemo(() => sales.filter((sale) => sale.status === 'live'), [sales])
+  const filteredSales = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    return sales.filter((sale) => {
+      const statusMatch = statusFilter === 'all' || sale.status === statusFilter
+      const keywordMatch =
+        keyword.length === 0 ||
+        (sale.eventTitle || '').toLowerCase().includes(keyword) ||
+        sale.id.toLowerCase().includes(keyword)
+      return statusMatch && keywordMatch
+    })
+  }, [sales, searchKeyword, statusFilter])
+
+  const liveCount = sales.filter((sale) => sale.status === 'live').length
+  const finalizedCount = sales.filter((sale) => sale.status === 'finalized').length
 
   return (
-    <main className="min-h-screen p-6 sm:p-8">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <header className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6 sm:p-8">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <Image
-                src="/logo-mark.png"
-                alt="Tickasting logo mark"
-                width={72}
-                height={72}
-                priority
-              />
-              <div>
-                <h1 className="text-3xl font-bold sm:text-4xl">
-                  <span className="text-kaspa-primary">Tick</span>asting
-                </h1>
-                <p className="text-sm text-gray-400 sm:text-base">
-                  Buy tickets, track results, and manage your NFT tickets in one place.
-                </p>
+    <main className="min-h-screen p-4 sm:p-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        <header className="overflow-hidden rounded-2xl border border-gray-800 bg-gradient-to-r from-gray-900 via-[#111827] to-gray-900">
+          <div className="grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-8">
+            <div>
+              <div className="mb-4 flex items-center gap-3">
+                <Image src="/logo-mark.png" alt="Tickasting logo mark" width={56} height={56} priority />
+                <div>
+                  <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                    <span className="text-kaspa-primary">Tick</span>asting
+                  </h1>
+                  <p className="text-sm text-gray-300 sm:text-base">
+                    Marketplace-style ticket browsing with on-chain purchase tracking.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">All Sales</div>
+                  <div className="mt-1 text-xl font-semibold text-white">{sales.length}</div>
+                </div>
+                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">Live Now</div>
+                  <div className="mt-1 text-xl font-semibold text-white">{liveCount}</div>
+                </div>
+                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">Finalized</div>
+                  <div className="mt-1 text-xl font-semibold text-white">{finalizedCount}</div>
+                </div>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="#sales"
-                className="rounded-lg bg-kaspa-primary px-4 py-2 text-sm font-semibold text-black hover:bg-kaspa-primary/90"
-              >
-                Browse Sales
-              </Link>
+            <div className="flex flex-wrap content-start gap-2 sm:w-48">
               <Link
                 href="/my-tickets"
-                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-200 hover:border-gray-500"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-2 text-center text-sm text-gray-100 hover:border-gray-500"
               >
                 My Tickets
               </Link>
               <Link
                 href="/scanner"
-                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-200 hover:border-gray-500"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-2 text-center text-sm text-gray-100 hover:border-gray-500"
               >
-                Gate Scanner
+                Scanner
               </Link>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-lg bg-gray-800/80 p-3 text-gray-300">
-              <div className="text-xs uppercase tracking-wide text-gray-500">Live Sales</div>
-              <div className="mt-1 text-xl font-semibold text-white">{liveSales.length}</div>
-            </div>
-            <div className="rounded-lg bg-gray-800/80 p-3 text-gray-300">
-              <div className="text-xs uppercase tracking-wide text-gray-500">Total Sales</div>
-              <div className="mt-1 text-xl font-semibold text-white">{sales.length}</div>
-            </div>
-            <div className="rounded-lg bg-gray-800/80 p-3 text-gray-300">
-              <div className="text-xs uppercase tracking-wide text-gray-500">Network</div>
-              <div className="mt-1 text-xl font-semibold text-white">Kasplex EVM</div>
             </div>
           </div>
         </header>
 
-        <section id="sales" className="rounded-2xl border border-gray-800 bg-gray-900/60 p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">Ticket Sales</h2>
-          </div>
-
-          {loading && <div className="py-8 text-center text-gray-400">Loading sales...</div>}
-          {error && !loading && <div className="py-8 text-center text-red-400">{error}</div>}
-
-          {!loading && !error && sales.length === 0 && (
-            <div className="rounded-lg border border-dashed border-gray-700 p-8 text-center text-gray-400">
-              No sales found. Create and publish a sale from the organizer API first.
-            </div>
-          )}
-
-          {!loading && !error && sales.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {sales.map((sale) => (
-                <article key={sale.id} className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{sale.eventTitle || 'Untitled Event'}</h3>
-                      <div className="mt-1 text-xs text-gray-500">{sale.id}</div>
-                    </div>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        sale.status === 'live'
-                          ? 'bg-green-500/20 text-green-300'
-                          : sale.status === 'finalized'
-                            ? 'bg-blue-500/20 text-blue-300'
-                            : 'bg-gray-700 text-gray-300'
-                      }`}
-                    >
-                      {sale.status}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-2 text-sm text-gray-300">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Price</span>
-                      <span>
-                        {formatTokenAmount(BigInt(sale.ticketPriceSompi))} {PAYMENT_SYMBOL}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Supply</span>
-                      <span>{sale.supplyTotal}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Start</span>
-                      <span>{formatDate(sale.startAt)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">End</span>
-                      <span>{formatDate(sale.endAt)}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link
-                      href={`/sales/${sale.id}`}
-                      className="rounded-md bg-kaspa-primary px-3 py-2 text-sm font-medium text-black hover:bg-kaspa-primary/90"
-                    >
-                      Buy / View Sale
-                    </Link>
-                    <Link
-                      href={`/sales/${sale.id}/live`}
-                      className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-gray-500"
-                    >
-                      Live Board
-                    </Link>
-                    <Link
-                      href={`/sales/${sale.id}/results`}
-                      className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-gray-500"
-                    >
-                      Results
-                    </Link>
-                  </div>
-                </article>
+        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+          <aside className="h-fit rounded-2xl border border-gray-800 bg-gray-900/70 p-4 lg:sticky lg:top-4">
+            <h2 className="mb-3 text-lg font-semibold text-white">Filters</h2>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-gray-500">
+              Search Event / Sale ID
+            </label>
+            <input
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="e.g. Aurora, seed-sale..."
+              className="mb-4 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-500"
+            />
+            <div className="space-y-2">
+              <div className="text-xs uppercase tracking-wide text-gray-500">Status</div>
+              {(['all', 'live', 'scheduled', 'finalizing', 'finalized'] as SaleStatusFilter[]).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                    statusFilter === status
+                      ? 'border-kaspa-primary bg-kaspa-primary/15 text-kaspa-primary'
+                      : 'border-gray-700 bg-gray-900/40 text-gray-200 hover:border-gray-500'
+                  }`}
+                >
+                  {status === 'all' ? 'All Status' : status}
+                </button>
               ))}
             </div>
-          )}
-        </section>
+          </aside>
+
+          <section className="rounded-2xl border border-gray-800 bg-gray-900/60 p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Ticket Sales</h2>
+              <span className="text-sm text-gray-400">{filteredSales.length} results</span>
+            </div>
+
+            {loading && <div className="py-16 text-center text-gray-400">Loading sales...</div>}
+            {error && !loading && <div className="py-16 text-center text-red-400">{error}</div>}
+
+            {!loading && !error && filteredSales.length === 0 && (
+              <div className="rounded-xl border border-dashed border-gray-700 p-10 text-center text-gray-400">
+                No matching sales. Try a different keyword or status filter.
+              </div>
+            )}
+
+            {!loading && !error && filteredSales.length > 0 && (
+              <div className="space-y-3">
+                {filteredSales.map((sale) => {
+                  const saleImage = getSaleImage(sale)
+                  return (
+                    <article
+                      key={sale.id}
+                      className="grid gap-3 rounded-xl border border-gray-800 bg-gray-950/70 p-3 sm:grid-cols-[180px_1fr_auto]"
+                    >
+                      <div className="overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
+                        {saleImage ? (
+                          <img
+                            src={saleImage}
+                            alt={`${sale.eventTitle || 'Sale'} poster`}
+                            className="h-28 w-full object-cover sm:h-full"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-28 items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-xs text-gray-500 sm:h-full">
+                            NO IMAGE
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-semibold text-white sm:text-lg">
+                            {sale.eventTitle || 'Untitled Event'}
+                          </h3>
+                          <span className={`rounded-full border px-2 py-0.5 text-xs ${statusClassName(sale.status)}`}>
+                            {sale.status}
+                          </span>
+                        </div>
+                        <div className="truncate text-xs text-gray-500">{sale.id}</div>
+                        <div className="mt-2 grid gap-1 text-sm text-gray-300 sm:grid-cols-2">
+                          <div>
+                            <span className="text-gray-500">Price</span>: {getPriceRangeLabel(sale)}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Supply</span>: {sale.supplyTotal}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Start</span>: {formatDate(sale.startAt)}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">End</span>: {formatDate(sale.endAt)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-row gap-2 sm:flex-col">
+                        <Link
+                          href={`/sales/${sale.id}`}
+                          className="rounded-md bg-kaspa-primary px-3 py-2 text-center text-sm font-semibold text-black hover:bg-kaspa-primary/90"
+                        >
+                          Buy
+                        </Link>
+                        <Link
+                          href={`/sales/${sale.id}/live`}
+                          className="rounded-md border border-gray-700 px-3 py-2 text-center text-sm text-gray-200 hover:border-gray-500"
+                        >
+                          Live
+                        </Link>
+                        <Link
+                          href={`/sales/${sale.id}/results`}
+                          className="rounded-md border border-gray-700 px-3 py-2 text-center text-sm text-gray-200 hover:border-gray-500"
+                        >
+                          Results
+                        </Link>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   )

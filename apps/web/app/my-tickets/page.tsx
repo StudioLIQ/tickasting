@@ -153,6 +153,17 @@ export default function MyTicketsPage() {
                         </span>
                       </div>
 
+                      {ticket.metadata.image && (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+                          <img
+                            src={ticket.metadata.image}
+                            alt={`${ticket.metadata.performanceTitle} poster`}
+                            className="h-40 w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
                       <div className="mt-3 grid gap-2 text-sm text-gray-300 sm:grid-cols-2">
                         <div>
                           <span className="text-gray-500">Performance Date: </span>

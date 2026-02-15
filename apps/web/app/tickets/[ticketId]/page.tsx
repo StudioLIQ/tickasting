@@ -3,8 +3,10 @@
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  cancelTicket,
   getTicket,
   getTicketMetadata,
+  transferTicket,
   type TicketDetail,
   type TicketNftMetadata,
 } from '@/lib/api'
@@ -26,19 +28,30 @@ export default function TicketDetailPage({ params }: PageProps) {
   const [metadata, setMetadata] = useState<TicketNftMetadata | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [transferAddress, setTransferAddress] = useState('')
+
+  const loadTicket = async () => {
+    const [ticketData, metadataData] = await Promise.all([
+      getTicket(ticketId),
+      getTicketMetadata(ticketId),
+    ])
+    setTicket(ticketData)
+    setMetadata(metadataData)
+  }
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       try {
-        const [ticketData, metadataData] = await Promise.all([
-          getTicket(ticketId),
-          getTicketMetadata(ticketId),
-        ])
+        const [ticketData, metadataData] = await Promise.all([getTicket(ticketId), getTicketMetadata(ticketId)])
         if (!cancelled) {
           setTicket(ticketData)
           setMetadata(metadataData)
+          setTransferAddress(ticketData.ownerAddress)
         }
       } catch (err) {
         if (!cancelled) {
@@ -56,6 +69,38 @@ export default function TicketDetailPage({ params }: PageProps) {
       cancelled = true
     }
   }, [ticketId])
+
+  const handleTransfer = async () => {
+    if (!ticket) return
+    setActionLoading(true)
+    setActionError(null)
+    setActionMessage(null)
+    try {
+      const result = await transferTicket(ticket.id, transferAddress.trim())
+      setActionMessage(result.message)
+      await loadTicket()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Transfer failed')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!ticket) return
+    setActionLoading(true)
+    setActionError(null)
+    setActionMessage(null)
+    try {
+      const result = await cancelTicket(ticket.id, 'Cancelled by ticket holder')
+      setActionMessage(result.message)
+      await loadTicket()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Cancel failed')
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -99,6 +144,16 @@ export default function TicketDetailPage({ params }: PageProps) {
           </div>
         </header>
 
+        {metadata.image && (
+          <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/70">
+            <img
+              src={metadata.image}
+              alt={`${ticket.eventTitle} ticket artwork`}
+              className="h-64 w-full object-cover sm:h-80"
+            />
+          </section>
+        )}
+
         <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6">
           <h2 className="mb-4 text-lg font-semibold text-white">Ticket Overview</h2>
           <div className="grid gap-2 text-sm text-gray-300 sm:grid-cols-2">
@@ -134,6 +189,46 @@ export default function TicketDetailPage({ params }: PageProps) {
               <span className="text-gray-500">Redeemed At</span>
               <div>{formatDate(ticket.redeemedAt)}</div>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">Ticket Actions</h2>
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm text-gray-400">Transfer To Address</label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={transferAddress}
+                  onChange={(e) => setTransferAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white"
+                />
+                <button
+                  onClick={() => void handleTransfer()}
+                  disabled={actionLoading || ticket.status !== 'issued'}
+                  className="rounded-md bg-kaspa-primary px-4 py-2 text-sm font-semibold text-black hover:bg-kaspa-primary/90 disabled:opacity-50"
+                >
+                  Transfer
+                </button>
+              </div>
+            </div>
+            <div>
+              <button
+                onClick={() => void handleCancel()}
+                disabled={actionLoading || ticket.status !== 'issued'}
+                className="rounded-md border border-red-500/60 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                Cancel Ticket
+              </button>
+            </div>
+            {actionMessage && <div className="text-sm text-green-400">{actionMessage}</div>}
+            {actionError && <div className="text-sm text-red-400">{actionError}</div>}
+            {ticket.status !== 'issued' && (
+              <div className="text-xs text-gray-500">
+                Transfers and cancellation are only available while ticket status is `issued`.
+              </div>
+            )}
           </div>
         </section>
 

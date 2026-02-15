@@ -246,6 +246,7 @@ describe('API E2E - buyer portal and metadata', () => {
     expect(issueRes.status).toBe(201)
     expect(issueRes.body.ticket.status).toBe('issued')
     const ticketId = issueRes.body.ticket.id
+    const ticketQrCode = issueRes.body.qrCode
 
     const missingOwner = await requestJson<{ error: string }>('/v1/tickets')
     expect(missingOwner.status).toBe(400)
@@ -278,6 +279,69 @@ describe('API E2E - buyer portal and metadata', () => {
     )
     expect(myTicketsIssuedFilter.status).toBe(200)
     expect(myTicketsIssuedFilter.body.total).toBeGreaterThanOrEqual(1)
+
+    const transferTo = '0x90f9fE6f8A6f8E5A7D34A6DbA4d3fC552A66B902'
+    const transferRes = await requestJson<{
+      message: string
+      ticket: { id: string; ownerAddress: string; status: string }
+    }>(`/v1/tickets/${ticketId}/transfer`, {
+      method: 'PATCH',
+      body: JSON.stringify({ toAddress: transferTo }),
+    })
+    expect(transferRes.status).toBe(200)
+    expect(transferRes.body.ticket.id).toBe(ticketId)
+    expect(transferRes.body.ticket.ownerAddress).toBe(transferTo.toLowerCase())
+    expect(transferRes.body.ticket.status).toBe('issued')
+
+    const oldOwnerAfterTransfer = await requestJson<{ total: number }>(
+      `/v1/tickets?ownerAddress=${encodeURIComponent(ownerAddress.toLowerCase())}`
+    )
+    expect(oldOwnerAfterTransfer.status).toBe(200)
+    expect(oldOwnerAfterTransfer.body.total).toBe(0)
+
+    const newOwnerAfterTransfer = await requestJson<{
+      total: number
+      tickets: Array<{ id: string }>
+    }>(`/v1/tickets?ownerAddress=${encodeURIComponent(transferTo.toLowerCase())}`)
+    expect(newOwnerAfterTransfer.status).toBe(200)
+    expect(newOwnerAfterTransfer.body.total).toBeGreaterThanOrEqual(1)
+    expect(newOwnerAfterTransfer.body.tickets.some((ticket) => ticket.id === ticketId)).toBe(true)
+
+    const cancelRes = await requestJson<{
+      message: string
+      ticket: { id: string; status: string }
+    }>(`/v1/tickets/${ticketId}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason: 'Buyer changed plans' }),
+    })
+    expect(cancelRes.status).toBe(200)
+    expect(cancelRes.body.ticket.id).toBe(ticketId)
+    expect(cancelRes.body.ticket.status).toBe('cancelled')
+
+    const myTicketsCancelledFilter = await requestJson<{ total: number }>(
+      `/v1/tickets?ownerAddress=${encodeURIComponent(transferTo.toLowerCase())}&status=cancelled`
+    )
+    expect(myTicketsCancelledFilter.status).toBe(200)
+    expect(myTicketsCancelledFilter.body.total).toBeGreaterThanOrEqual(1)
+
+    const verifyCancelled = await requestJson<{
+      valid: boolean
+      result: string
+      message: string
+    }>('/v1/scans/verify', {
+      method: 'POST',
+      body: JSON.stringify({ qrCode: ticketQrCode }),
+    })
+    expect(verifyCancelled.status).toBe(200)
+    expect(verifyCancelled.body.valid).toBe(false)
+    expect(verifyCancelled.body.result).toBe('deny_invalid_ticket')
+    expect(verifyCancelled.body.message).toContain('cancelled')
+
+    const transferAfterCancel = await requestJson<{ error: string }>(`/v1/tickets/${ticketId}/transfer`, {
+      method: 'PATCH',
+      body: JSON.stringify({ toAddress: ownerAddress }),
+    })
+    expect(transferAfterCancel.status).toBe(400)
 
     const myTicketsRedeemedFilter = await requestJson<{ total: number }>(
       `/v1/tickets?ownerAddress=${encodeURIComponent(ownerAddress.toLowerCase())}&status=redeemed`

@@ -2,12 +2,43 @@ import { PrismaClient } from '@prisma/client'
 import { createHash, createHmac } from 'crypto'
 
 const prisma = new PrismaClient()
-const demoTreasuryAddress =
+const defaultTreasuryAddress =
   process.env['DEMO_TREASURY_ADDRESS'] ||
   process.env['DEPLOYER_ADDRESS'] ||
   '0xdeCBa1c1b410458A07adAC185Ab774B716B4e7a3'
-const demoClaimContractAddress = process.env['TICKASTING_CONTRACT_ADDRESS'] || null
+const claimContractAddress = process.env['TICKASTING_CONTRACT_ADDRESS'] || null
 const ticketSecret = process.env['TICKET_SECRET'] || 'dev-ticket-secret-change-in-prod'
+
+interface TicketTypeSeed {
+  code: string
+  name: string
+  priceSompi: number
+  supply: number
+  metadataUri: string
+  perk: Record<string, unknown> | null
+}
+
+interface SaleSeed {
+  id: string
+  status: 'live' | 'finalized'
+  supplyTotal: number
+  maxPerAddress: number
+  startOffsetDays: number
+  endOffsetDays: number
+  seededTicketCount: number
+  seededInvalidAttempts: number
+  ticketTypes: TicketTypeSeed[]
+}
+
+interface EventSeed {
+  id: string
+  organizerId: string
+  title: string
+  venue: string
+  startAtIso: string
+  endAtIso: string
+  sale: SaleSeed
+}
 
 function sha256Hex(input: string): string {
   return createHash('sha256').update(input).digest('hex')
@@ -18,295 +49,417 @@ function signTicketData(ticketId: string, saleId: string, txid: string): string 
   return createHmac('sha256', ticketSecret).update(message).digest('hex')
 }
 
+function evmAddressFromSeed(seed: string): string {
+  return `0x${sha256Hex(seed).slice(0, 40)}`
+}
+
+function txHashFromSeed(seed: string): string {
+  return `0x${sha256Hex(seed).slice(0, 64)}`
+}
+
+function blockHashFromSeed(seed: string): string {
+  return `0x${sha256Hex(`block:${seed}`).slice(0, 64)}`
+}
+
+function addDays(base: Date, days: number): Date {
+  return new Date(base.getTime() + days * 24 * 60 * 60 * 1000)
+}
+
+const eventSeeds: EventSeed[] = [
+  {
+    id: 'seed-event-aurora-pulse-2026',
+    organizerId: 'live-stage-seoul',
+    title: 'Aurora Pulse Live in Seoul 2026',
+    venue: 'Jamsil Indoor Arena, Seoul',
+    startAtIso: '2026-06-14T11:00:00.000Z',
+    endAtIso: '2026-06-14T14:00:00.000Z',
+    sale: {
+      id: 'seed-sale-aurora-pulse-2026',
+      status: 'live',
+      supplyTotal: 360,
+      maxPerAddress: 4,
+      startOffsetDays: -3,
+      endOffsetDays: 21,
+      seededTicketCount: 64,
+      seededInvalidAttempts: 16,
+      ticketTypes: [
+        {
+          code: 'VIP',
+          name: 'VIP Soundcheck Package',
+          priceSompi: 500_000,
+          supply: 60,
+          metadataUri: 'https://picsum.photos/seed/aurora-vip/1200/1600',
+          perk: { section: 'VIP', row: 'L', seatNumber: '1-60', soundcheckAccess: true },
+        },
+        {
+          code: 'FLOOR',
+          name: 'Floor Zone',
+          priceSompi: 320_000,
+          supply: 140,
+          metadataUri: 'https://picsum.photos/seed/aurora-floor/1200/1600',
+          perk: { section: 'F', row: 'A', seatNumber: '1-140' },
+        },
+        {
+          code: 'BALC',
+          name: 'Balcony Reserved',
+          priceSompi: 180_000,
+          supply: 160,
+          metadataUri: 'https://picsum.photos/seed/aurora-balc/1200/1600',
+          perk: { section: 'B', row: 'R', seatNumber: '1-160' },
+        },
+      ],
+    },
+  },
+  {
+    id: 'seed-event-neon-harbor-2026',
+    organizerId: 'coastline-ent',
+    title: 'Neon Harbor Nights Tour - Busan',
+    venue: 'BEXCO Auditorium, Busan',
+    startAtIso: '2026-07-05T10:30:00.000Z',
+    endAtIso: '2026-07-05T13:30:00.000Z',
+    sale: {
+      id: 'seed-sale-neon-harbor-2026',
+      status: 'live',
+      supplyTotal: 320,
+      maxPerAddress: 4,
+      startOffsetDays: -1,
+      endOffsetDays: 18,
+      seededTicketCount: 58,
+      seededInvalidAttempts: 14,
+      ticketTypes: [
+        {
+          code: 'PIT',
+          name: 'Front Pit',
+          priceSompi: 450_000,
+          supply: 70,
+          metadataUri: 'https://picsum.photos/seed/neon-pit/1200/1600',
+          perk: { section: 'PIT', row: 'A', seatNumber: '1-70' },
+        },
+        {
+          code: 'R',
+          name: 'Reserved R',
+          priceSompi: 280_000,
+          supply: 110,
+          metadataUri: 'https://picsum.photos/seed/neon-r/1200/1600',
+          perk: { section: 'R', row: 'C', seatNumber: '1-110' },
+        },
+        {
+          code: 'S',
+          name: 'Standard S',
+          priceSompi: 150_000,
+          supply: 140,
+          metadataUri: 'https://picsum.photos/seed/neon-s/1200/1600',
+          perk: { section: 'S', row: 'F', seatNumber: '1-140' },
+        },
+      ],
+    },
+  },
+  {
+    id: 'seed-event-riverfront-beats-2026',
+    organizerId: 'openair-festival-kr',
+    title: 'Riverfront Summer Beats 2026',
+    venue: 'Hangang Riverside Stage, Seoul',
+    startAtIso: '2026-08-22T08:00:00.000Z',
+    endAtIso: '2026-08-22T16:00:00.000Z',
+    sale: {
+      id: 'seed-sale-riverfront-beats-2026',
+      status: 'live',
+      supplyTotal: 520,
+      maxPerAddress: 6,
+      startOffsetDays: -5,
+      endOffsetDays: 30,
+      seededTicketCount: 82,
+      seededInvalidAttempts: 20,
+      ticketTypes: [
+        {
+          code: 'FESTVIP',
+          name: 'Festival VIP Pass',
+          priceSompi: 400_000,
+          supply: 80,
+          metadataUri: 'https://picsum.photos/seed/river-vip/1200/1600',
+          perk: { section: 'VIP', loungeAccess: true, fastTrack: true },
+        },
+        {
+          code: 'DAYPASS',
+          name: 'Day Pass',
+          priceSompi: 180_000,
+          supply: 220,
+          metadataUri: 'https://picsum.photos/seed/river-day/1200/1600',
+          perk: { seat: 'Open Standing Zone' },
+        },
+        {
+          code: 'NIGHT',
+          name: 'Night Session',
+          priceSompi: 100_000,
+          supply: 220,
+          metadataUri: 'https://picsum.photos/seed/river-night/1200/1600',
+          perk: { seat: 'Night Stage Standing' },
+        },
+      ],
+    },
+  },
+  {
+    id: 'seed-event-city-strings-2026',
+    organizerId: 'metropolitan-arts',
+    title: 'City Strings Live: Film Score Gala',
+    venue: 'Sejong Center Grand Theater, Seoul',
+    startAtIso: '2026-05-17T10:00:00.000Z',
+    endAtIso: '2026-05-17T12:30:00.000Z',
+    sale: {
+      id: 'seed-sale-city-strings-2026',
+      status: 'finalized',
+      supplyTotal: 280,
+      maxPerAddress: 3,
+      startOffsetDays: -35,
+      endOffsetDays: -12,
+      seededTicketCount: 48,
+      seededInvalidAttempts: 12,
+      ticketTypes: [
+        {
+          code: 'BOX',
+          name: 'Premium Box',
+          priceSompi: 500_000,
+          supply: 40,
+          metadataUri: 'https://picsum.photos/seed/strings-box/1200/1600',
+          perk: { section: 'BOX', row: 'B', seatNumber: '1-40' },
+        },
+        {
+          code: 'ORCH',
+          name: 'Orchestra Seat',
+          priceSompi: 300_000,
+          supply: 110,
+          metadataUri: 'https://picsum.photos/seed/strings-orch/1200/1600',
+          perk: { section: 'ORCH', row: 'D', seatNumber: '1-110' },
+        },
+        {
+          code: 'MEZZ',
+          name: 'Mezzanine',
+          priceSompi: 140_000,
+          supply: 130,
+          metadataUri: 'https://picsum.photos/seed/strings-mezz/1200/1600',
+          perk: { section: 'MEZZ', row: 'H', seatNumber: '1-130' },
+        },
+      ],
+    },
+  },
+]
+
+async function cleanupManagedSeedData() {
+  const targetSalesQuery = `
+    SELECT id FROM "public"."sales"
+    WHERE id LIKE 'seed-sale-%'
+       OR id = 'demo-sale-001'
+       OR event_id IN (
+         SELECT id FROM "public"."events"
+         WHERE id LIKE 'seed-event-%'
+            OR organizer_id = 'demo-organizer'
+            OR title ILIKE '%demo%'
+       )
+  `
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."scans"
+     WHERE ticket_id IN (
+       SELECT id FROM "public"."tickets"
+       WHERE sale_id IN (${targetSalesQuery})
+     )`
+  )
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."tickets"
+     WHERE sale_id IN (${targetSalesQuery})`
+  )
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."purchase_attempts"
+     WHERE sale_id IN (${targetSalesQuery})`
+  )
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."ticket_types"
+     WHERE sale_id IN (${targetSalesQuery})`
+  )
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."sales"
+     WHERE id IN (${targetSalesQuery})`
+  )
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "public"."events"
+     WHERE id LIKE 'seed-event-%'
+        OR organizer_id = 'demo-organizer'
+        OR title ILIKE '%demo%'`
+  )
+}
+
 async function main() {
-  console.log('Seeding database...')
+  console.log('Seeding realistic concert data...')
+  await cleanupManagedSeedData()
+
   const now = new Date()
-  const saleStart = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const saleEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const ownerPool = Array.from({ length: 260 }, (_, i) =>
+    evmAddressFromSeed(`seed-owner-wallet-${i + 1}`)
+  )
 
-  // Create sample event
-  const event = await prisma.event.upsert({
-    where: { id: 'demo-event-001' },
-    update: {},
-    create: {
-      id: 'demo-event-001',
-      organizerId: 'demo-organizer',
-      title: 'Tickasting Demo Concert',
-      venue: 'Kaspa Arena',
-      startAt: new Date('2025-03-01T19:00:00Z'),
-      endAt: new Date('2025-03-01T23:00:00Z'),
-      status: 'published',
-    },
-  })
+  let ownerCursor = 0
+  let globalTicketCounter = 0
+  let globalAttemptCounter = 0
 
-  console.log(`Created event: ${event.title}`)
-
-  // Create sample sale
-  const sale = await prisma.sale.upsert({
-    where: { id: 'demo-sale-001' },
-    update: {
-      network: 'kasplex-testnet',
-      treasuryAddress: demoTreasuryAddress,
-      ticketPriceSompi: BigInt(1_000_000), // 1 USDC (6 decimals)
-      finalityDepth: 12,
-      startAt: saleStart,
-      endAt: saleEnd,
-      status: 'live',
-      claimContractAddress: demoClaimContractAddress,
-    },
-    create: {
-      id: 'demo-sale-001',
-      eventId: event.id,
-      network: 'kasplex-testnet',
-      treasuryAddress: demoTreasuryAddress,
-      ticketPriceSompi: BigInt(1_000_000), // 1 USDC (6 decimals)
-      supplyTotal: 100,
-      maxPerAddress: 2,
-      powDifficulty: 18,
-      finalityDepth: 12,
-      startAt: saleStart,
-      endAt: saleEnd,
-      status: 'live',
-      claimContractAddress: demoClaimContractAddress,
-    },
-  })
-
-  console.log(`Created sale: ${sale.id} for event ${event.title}`)
-  console.log(`  - Treasury: ${sale.treasuryAddress}`)
-  console.log(`  - Price: ${sale.ticketPriceSompi} (USDC smallest unit, 6 decimals)`)
-  console.log(`  - Supply: ${sale.supplyTotal}`)
-  console.log(`  - Finality Depth: ${sale.finalityDepth}`)
-  if (sale.claimContractAddress) {
-    console.log(`  - Claim Contract: ${sale.claimContractAddress}`)
-  }
-
-  // Create ticket types (VIP / Reserved / General)
-  const ticketTypes = [
-    {
-      id: 'demo-type-vip',
-      saleId: sale.id,
-      code: 'VIP',
-      name: 'VIP Standing',
-      priceSompi: BigInt(5_000_000), // 5 USDC
-      supply: 10,
-      metadataUri: 'ipfs://demo/vip',
-      perk: { backstageAccess: true, merchandiseIncluded: true },
-      sortOrder: 0,
-    },
-    {
-      id: 'demo-type-r',
-      saleId: sale.id,
-      code: 'R',
-      name: 'Reserved Seat',
-      priceSompi: BigInt(2_000_000), // 2 USDC
-      supply: 40,
-      metadataUri: 'ipfs://demo/reserved',
-      perk: { seatSection: 'A-D' },
-      sortOrder: 1,
-    },
-    {
-      id: 'demo-type-gen',
-      saleId: sale.id,
-      code: 'GEN',
-      name: 'General Admission',
-      priceSompi: BigInt(1_000_000), // 1 USDC
-      supply: 50,
-      metadataUri: 'ipfs://demo/general',
-      perk: null,
-      sortOrder: 2,
-    },
-  ]
-
-  for (const tt of ticketTypes) {
-    await prisma.ticketType.upsert({
-      where: { id: tt.id },
-      update: {
-        priceSompi: tt.priceSompi,
-        supply: tt.supply,
-        metadataUri: tt.metadataUri,
-        perk: tt.perk ?? undefined,
-      },
-      create: tt,
-    })
-    console.log(
-      `  - Ticket type: ${tt.code} (${tt.name}) — supply: ${tt.supply}, price: ${tt.priceSompi} (USDC unit)`
-    )
-  }
-
-  const ticketTypeByCode = new Map(ticketTypes.map((tt) => [tt.code, tt.id]))
-
-  const sampleAttempts = [
-    {
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
-      requestedTypeCode: 'VIP',
-      buyerAddrHash: sha256Hex('demo-buyer-1'),
-      validationStatus: 'valid' as const,
-      accepted: true,
-      acceptingBlockHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb01',
-      acceptingBlueScore: BigInt(1200001),
-      confirmations: 24,
-      provisionalRank: 1,
-      finalRank: 1,
-    },
-    {
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2',
-      requestedTypeCode: 'R',
-      buyerAddrHash: sha256Hex('demo-buyer-2'),
-      validationStatus: 'valid' as const,
-      accepted: true,
-      acceptingBlockHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb02',
-      acceptingBlueScore: BigInt(1200002),
-      confirmations: 23,
-      provisionalRank: 2,
-      finalRank: 2,
-    },
-    {
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3',
-      requestedTypeCode: 'GEN',
-      buyerAddrHash: sha256Hex('demo-buyer-3'),
-      validationStatus: 'valid' as const,
-      accepted: true,
-      acceptingBlockHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb03',
-      acceptingBlueScore: BigInt(1200003),
-      confirmations: 22,
-      provisionalRank: 3,
-      finalRank: 3,
-    },
-    {
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4',
-      requestedTypeCode: 'GEN',
-      buyerAddrHash: sha256Hex('demo-buyer-4'),
-      validationStatus: 'valid' as const,
-      accepted: true,
-      acceptingBlockHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb04',
-      acceptingBlueScore: BigInt(1200004),
-      confirmations: 18,
-      provisionalRank: 4,
-      finalRank: 4,
-    },
-    {
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa5',
-      requestedTypeCode: 'R',
-      buyerAddrHash: sha256Hex('demo-buyer-5'),
-      validationStatus: 'invalid_pow' as const,
-      accepted: false,
-      acceptingBlockHash: null,
-      acceptingBlueScore: null,
-      confirmations: 4,
-      provisionalRank: null,
-      finalRank: null,
-    },
-  ]
-
-  for (const attempt of sampleAttempts) {
-    await prisma.purchaseAttempt.upsert({
-      where: { txid: attempt.txid },
-      update: {
-        saleId: sale.id,
-        requestedTicketTypeId: ticketTypeByCode.get(attempt.requestedTypeCode) ?? null,
-        buyerAddrHash: attempt.buyerAddrHash,
-        validationStatus: attempt.validationStatus,
-        accepted: attempt.accepted,
-        acceptingBlockHash: attempt.acceptingBlockHash,
-        acceptingBlueScore: attempt.acceptingBlueScore,
-        confirmations: attempt.confirmations,
-        provisionalRank: attempt.provisionalRank,
-        finalRank: attempt.finalRank,
-        payloadHex: null,
-        invalidReason: attempt.validationStatus === 'invalid_pow' ? 'Demo invalid PoW sample' : null,
-        lastCheckedAt: new Date(),
-      },
-      create: {
-        saleId: sale.id,
-        requestedTicketTypeId: ticketTypeByCode.get(attempt.requestedTypeCode) ?? null,
-        txid: attempt.txid,
-        buyerAddrHash: attempt.buyerAddrHash,
-        validationStatus: attempt.validationStatus,
-        accepted: attempt.accepted,
-        acceptingBlockHash: attempt.acceptingBlockHash,
-        acceptingBlueScore: attempt.acceptingBlueScore,
-        confirmations: attempt.confirmations,
-        provisionalRank: attempt.provisionalRank,
-        finalRank: attempt.finalRank,
-        payloadHex: null,
-        invalidReason: attempt.validationStatus === 'invalid_pow' ? 'Demo invalid PoW sample' : null,
-        lastCheckedAt: new Date(),
-      },
-    })
-  }
-  console.log(`  - Purchase attempts seeded: ${sampleAttempts.length}`)
-
-  const sampleTickets = [
-    {
-      id: '11111111-1111-4111-8111-111111111111',
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
-      typeCode: 'VIP',
-      ownerAddress: '0x1f8f9C7A13f2a0fB67d8d3d376fA7040A6f7B101',
-      claimTxid: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc01',
-      tokenId: '1',
-      status: 'issued' as const,
-      redeemedAt: null,
-    },
-    {
-      id: '22222222-2222-4222-8222-222222222222',
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2',
-      typeCode: 'R',
-      ownerAddress: '0x2E06a2b5A3d2C73fb8c01Fb8A3C0Ee7fD50D1202',
-      claimTxid: null,
-      tokenId: null,
-      status: 'issued' as const,
-      redeemedAt: null,
-    },
-    {
-      id: '33333333-3333-4333-8333-333333333333',
-      txid: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3',
-      typeCode: 'GEN',
-      ownerAddress: '0x37C0c7E4c90e91fDa36d5f1b127f0dD4f32B4303',
-      claimTxid: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc03',
-      tokenId: '3',
-      status: 'redeemed' as const,
-      redeemedAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
-    },
-  ]
-
-  for (const ticket of sampleTickets) {
-    const ownerAddrHash = sha256Hex(ticket.ownerAddress.toLowerCase())
-    const qrSignature = signTicketData(ticket.id, sale.id, ticket.txid)
-
-    await prisma.ticket.upsert({
-      where: { id: ticket.id },
-      update: {
-        saleId: sale.id,
-        ticketTypeId: ticketTypeByCode.get(ticket.typeCode) ?? null,
-        ownerAddress: ticket.ownerAddress,
-        ownerAddrHash,
-        originTxid: ticket.txid,
-        claimTxid: ticket.claimTxid,
-        tokenId: ticket.tokenId,
-        status: ticket.status,
-        qrSignature,
-        redeemedAt: ticket.redeemedAt,
-      },
-      create: {
-        id: ticket.id,
-        saleId: sale.id,
-        ticketTypeId: ticketTypeByCode.get(ticket.typeCode) ?? null,
-        ownerAddress: ticket.ownerAddress,
-        ownerAddrHash,
-        originTxid: ticket.txid,
-        claimTxid: ticket.claimTxid,
-        tokenId: ticket.tokenId,
-        status: ticket.status,
-        qrSignature,
-        redeemedAt: ticket.redeemedAt,
+  for (const [eventIndex, eventSeed] of eventSeeds.entries()) {
+    const event = await prisma.event.create({
+      data: {
+        id: eventSeed.id,
+        organizerId: eventSeed.organizerId,
+        title: eventSeed.title,
+        venue: eventSeed.venue,
+        startAt: new Date(eventSeed.startAtIso),
+        endAt: new Date(eventSeed.endAtIso),
+        status: 'published',
       },
     })
 
-    console.log(`  - Ticket sample: ${ticket.id} (${ticket.typeCode}, ${ticket.status})`)
-    console.log(`    QR: TK1|${ticket.id}|${sale.id}|${ticket.txid}|${qrSignature}`)
+    const saleSeed = eventSeed.sale
+    const ticketPriceSompi = Math.min(...saleSeed.ticketTypes.map((tt) => tt.priceSompi))
+    const sale = await prisma.sale.create({
+      data: {
+        id: saleSeed.id,
+        eventId: event.id,
+        network: 'kasplex-testnet',
+        treasuryAddress: evmAddressFromSeed(
+          `seed-treasury-${eventIndex + 1}-${defaultTreasuryAddress.toLowerCase()}`
+        ),
+        ticketPriceSompi: BigInt(ticketPriceSompi),
+        supplyTotal: saleSeed.supplyTotal,
+        maxPerAddress: saleSeed.maxPerAddress,
+        powDifficulty: 18,
+        finalityDepth: 12,
+        fallbackEnabled: false,
+        startAt: addDays(now, saleSeed.startOffsetDays),
+        endAt: addDays(now, saleSeed.endOffsetDays),
+        status: saleSeed.status,
+        claimContractAddress,
+      },
+    })
+
+    const ticketTypeByCode = new Map<string, string>()
+    for (const [sortOrder, ticketTypeSeed] of saleSeed.ticketTypes.entries()) {
+      const ticketType = await prisma.ticketType.create({
+        data: {
+          id: `${sale.id}-type-${ticketTypeSeed.code.toLowerCase()}`,
+          saleId: sale.id,
+          code: ticketTypeSeed.code,
+          name: ticketTypeSeed.name,
+          priceSompi: BigInt(ticketTypeSeed.priceSompi),
+          supply: ticketTypeSeed.supply,
+          metadataUri: ticketTypeSeed.metadataUri,
+          perk: ticketTypeSeed.perk ?? undefined,
+          sortOrder,
+        },
+      })
+      ticketTypeByCode.set(ticketTypeSeed.code, ticketType.id)
+    }
+
+    for (let i = 0; i < saleSeed.seededTicketCount; i += 1) {
+      const ticketTypeSeed = saleSeed.ticketTypes[i % saleSeed.ticketTypes.length]
+      const txid = txHashFromSeed(`${sale.id}-winner-${i + 1}`)
+      const ownerAddress = ownerPool[ownerCursor % ownerPool.length] || evmAddressFromSeed(`fallback-owner-${i + 1}`)
+      ownerCursor += 1
+      globalAttemptCounter += 1
+
+      await prisma.purchaseAttempt.create({
+        data: {
+          saleId: sale.id,
+          requestedTicketTypeId: ticketTypeByCode.get(ticketTypeSeed.code) ?? null,
+          txid,
+          buyerAddrHash: sha256Hex(ownerAddress.toLowerCase()),
+          validationStatus: 'valid',
+          invalidReason: null,
+          payloadHex: null,
+          accepted: true,
+          acceptingBlockHash: blockHashFromSeed(`${sale.id}-winner-${i + 1}`),
+          acceptingBlueScore: BigInt(2_300_000 + i),
+          confirmations: 14 + (i % 12),
+          provisionalRank: i + 1,
+          finalRank: i + 1,
+          lastCheckedAt: now,
+        },
+      })
+
+      const ticketId = `${sale.id}-ticket-${String(i + 1).padStart(3, '0')}`
+      const claimTxid = i % 3 === 0 ? txHashFromSeed(`${sale.id}-claim-${i + 1}`) : null
+      const tokenId = claimTxid ? String(i + 1) : null
+      const isRedeemed = i % 9 === 0
+      const redeemedAt = isRedeemed ? addDays(now, -(i % 7) - 1) : null
+      const qrSignature = signTicketData(ticketId, sale.id, txid)
+
+      await prisma.ticket.create({
+        data: {
+          id: ticketId,
+          saleId: sale.id,
+          ticketTypeId: ticketTypeByCode.get(ticketTypeSeed.code) ?? null,
+          ownerAddress,
+          ownerAddrHash: sha256Hex(ownerAddress.toLowerCase()),
+          originTxid: txid,
+          claimTxid,
+          tokenId,
+          status: isRedeemed ? 'redeemed' : 'issued',
+          qrSignature,
+          redeemedAt,
+        },
+      })
+
+      if (isRedeemed) {
+        await prisma.scan.create({
+          data: {
+            ticketId,
+            gateId: `gate-${(i % 4) + 1}`,
+            operatorId: 'seed-gate-bot',
+            result: 'ok',
+          },
+        })
+      }
+
+      globalTicketCounter += 1
+    }
+
+    for (let i = 0; i < saleSeed.seededInvalidAttempts; i += 1) {
+      const txid = txHashFromSeed(`${sale.id}-invalid-${i + 1}`)
+      globalAttemptCounter += 1
+
+      await prisma.purchaseAttempt.create({
+        data: {
+          saleId: sale.id,
+          requestedTicketTypeId: null,
+          txid,
+          buyerAddrHash: sha256Hex(`invalid-attempt-${sale.id}-${i + 1}`),
+          validationStatus: i % 2 === 0 ? 'invalid_wrong_amount' : 'invalid_pow',
+          invalidReason: i % 2 === 0 ? 'Wrong USDC amount for ticket price' : 'Failed PoW validation',
+          payloadHex: null,
+          accepted: false,
+          acceptingBlockHash: null,
+          acceptingBlueScore: null,
+          confirmations: i % 6,
+          provisionalRank: null,
+          finalRank: null,
+          lastCheckedAt: now,
+        },
+      })
+    }
+
+    console.log(`Event: ${event.title}`)
+    console.log(`  Sale: ${sale.id} (${sale.status})`)
+    console.log(`  Price range: 0.1 - 0.5 USDC`)
+    console.log(`  Ticket rows seeded: ${saleSeed.seededTicketCount}`)
+    console.log(`  Invalid attempts seeded: ${saleSeed.seededInvalidAttempts}`)
   }
 
   console.log('Seeding complete!')
+  console.log(`  - Events seeded: ${eventSeeds.length}`)
+  console.log(`  - Sales seeded: ${eventSeeds.length}`)
+  console.log(`  - Purchase attempts seeded: ${globalAttemptCounter}`)
+  console.log(`  - Tickets seeded: ${globalTicketCounter}`)
+  console.log(`  - Unique owner wallets used: ${Math.min(ownerCursor, ownerPool.length)}`)
 }
 
 main()

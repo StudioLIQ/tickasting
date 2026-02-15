@@ -471,6 +471,126 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     }
   )
 
+  // Transfer ticket ownership (issued tickets only)
+  const transferTicketSchema = z.object({
+    toAddress: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/, 'toAddress must be a valid EVM address'),
+  })
+
+  fastify.patch<{ Params: { ticketId: string } }>(
+    '/v1/tickets/:ticketId/transfer',
+    async (request, reply) => {
+      const { ticketId } = request.params
+      const parseResult = transferTicketSchema.safeParse(request.body)
+      if (!parseResult.success) {
+        reply.status(400)
+        return { error: 'Validation failed', details: parseResult.error.flatten() }
+      }
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+      })
+      if (!ticket) {
+        reply.status(404)
+        return { error: 'Ticket not found' }
+      }
+
+      if (ticket.status !== 'issued') {
+        reply.status(400)
+        return { error: `Cannot transfer ticket in status '${ticket.status}'` }
+      }
+
+      const nextOwner = parseResult.data.toAddress.toLowerCase()
+      if (ticket.ownerAddress.toLowerCase() === nextOwner) {
+        reply.status(400)
+        return { error: 'New owner address must be different from current owner' }
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          ownerAddress: nextOwner,
+          ownerAddrHash: computeBuyerAddrHash(nextOwner),
+        },
+      })
+
+      return {
+        message: 'Ticket transferred successfully',
+        ticket: {
+          id: updated.id,
+          saleId: updated.saleId,
+          ownerAddress: updated.ownerAddress,
+          status: updated.status,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+      }
+    }
+  )
+
+  // Cancel ticket (issued tickets only)
+  const cancelTicketSchema = z.object({
+    reason: z.string().max(500).optional(),
+  })
+
+  fastify.patch<{ Params: { ticketId: string } }>(
+    '/v1/tickets/:ticketId/cancel',
+    async (request, reply) => {
+      const { ticketId } = request.params
+      const parseResult = cancelTicketSchema.safeParse(request.body)
+      if (!parseResult.success) {
+        reply.status(400)
+        return { error: 'Validation failed', details: parseResult.error.flatten() }
+      }
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+      })
+      if (!ticket) {
+        reply.status(404)
+        return { error: 'Ticket not found' }
+      }
+
+      if (ticket.status === 'redeemed') {
+        reply.status(400)
+        return { error: 'Cannot cancel a redeemed ticket' }
+      }
+
+      if (ticket.status === 'cancelled') {
+        return {
+          message: 'Ticket is already cancelled',
+          ticket: {
+            id: ticket.id,
+            saleId: ticket.saleId,
+            ownerAddress: ticket.ownerAddress,
+            status: ticket.status,
+            updatedAt: ticket.updatedAt.toISOString(),
+            reason: parseResult.data.reason ?? null,
+          },
+        }
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'cancelled',
+        },
+      })
+
+      return {
+        message: 'Ticket cancelled successfully',
+        ticket: {
+          id: updated.id,
+          saleId: updated.saleId,
+          ownerAddress: updated.ownerAddress,
+          status: updated.status,
+          updatedAt: updated.updatedAt.toISOString(),
+          reason: parseResult.data.reason ?? null,
+        },
+      }
+    }
+  )
+
   // Get ticket metadata (NFT style)
   fastify.get<{ Params: { ticketId: string } }>(
     '/v1/tickets/:ticketId/metadata',
@@ -508,6 +628,7 @@ interface TicketMetadataSummary {
   performanceEndDate: string | null
   venue: string | null
   seat: string
+  image: string | null
 }
 
 interface TicketNftMetadata {
@@ -612,6 +733,7 @@ function buildTicketMetadataSummary(ticket: TicketWithMetadataContext): TicketMe
     performanceEndDate: ticket.sale.event.endAt?.toISOString() ?? null,
     venue: ticket.sale.event.venue ?? null,
     seat: buildSeatLabel(ticket.ticketType),
+    image: ticket.ticketType?.metadataUri ?? null,
   }
 }
 

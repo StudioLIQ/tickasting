@@ -7,7 +7,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
+import { getEvmSaleComputed, useEvmPurchases } from '../evm-purchases.js'
 import {
+  computeBuyerAddrHash,
   decodeTicketQR,
   encodeTicketQR,
   type TicketQRData,
@@ -42,24 +44,36 @@ export async function scannerRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      // Check purchase attempt exists and is a winner
-      const attempt = await prisma.purchaseAttempt.findFirst({
-        where: { saleId, txid },
-      })
+      let buyerAddrHash = ''
+      if (useEvmPurchases()) {
+        const computed = await getEvmSaleComputed(sale)
+        const attempt = computed.winners.find((a) => a.txid.toLowerCase() === txid.toLowerCase())
 
-      if (!attempt) {
-        reply.status(404)
-        return { error: 'Purchase attempt not found' }
-      }
+        if (!attempt) {
+          reply.status(400)
+          return { error: 'Not a winner or not finalized yet' }
+        }
+        buyerAddrHash = attempt.buyerAddrHash
+      } else {
+        const attempt = await prisma.purchaseAttempt.findFirst({
+          where: { saleId, txid },
+        })
 
-      if (attempt.validationStatus !== 'valid') {
-        reply.status(400)
-        return { error: 'Purchase is not valid', status: attempt.validationStatus }
-      }
+        if (!attempt) {
+          reply.status(404)
+          return { error: 'Purchase attempt not found' }
+        }
 
-      if (!attempt.finalRank || attempt.finalRank > sale.supplyTotal) {
-        reply.status(400)
-        return { error: 'Not a winner', finalRank: attempt.finalRank }
+        if (attempt.validationStatus !== 'valid') {
+          reply.status(400)
+          return { error: 'Purchase is not valid', status: attempt.validationStatus }
+        }
+
+        if (!attempt.finalRank || attempt.finalRank > sale.supplyTotal) {
+          reply.status(400)
+          return { error: 'Not a winner', finalRank: attempt.finalRank }
+        }
+        buyerAddrHash = attempt.buyerAddrHash ?? ''
       }
 
       // Check if ticket already issued for this txid
@@ -92,7 +106,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
         data: {
           saleId,
           ownerAddress,
-          ownerAddrHash: attempt.buyerAddrHash ?? '',
+          ownerAddrHash: buyerAddrHash || computeBuyerAddrHash(ownerAddress.toLowerCase()),
           originTxid: txid,
           status: 'issued',
           qrSignature: '', // Will be updated below

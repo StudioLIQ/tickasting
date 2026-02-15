@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Tickasting - Fair Ticketing on Kaspa',
-  description: 'Zero-lag ticketing powered by Kaspa blockchain. Deterministic ordering, verifiable results.',
+  title: 'Tickasting - Fair Ticketing on Kasplex',
+  description: 'On-chain EVM ordering ticketing on Kasplex testnet. Deterministic and verifiable.',
   icons: {
     icon: [{ url: '/favicon.ico' }, { url: '/icon.png', type: 'image/png' }],
     apple: '/icon.png',

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { WebSocket } from '@fastify/websocket'
 import { prisma } from '../db.js'
+import { getEvmSaleComputed, findEvmAttemptByTxid, useEvmPurchases } from '../evm-purchases.js'
 
 interface SaleStats {
   saleId: string
@@ -122,24 +123,37 @@ async function getSaleStats(saleId: string): Promise<SaleStats | null> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } })
   if (!sale) return null
 
-  const [totalAttempts, validAttempts, acceptedAttempts, finalAttempts] =
-    await Promise.all([
-      prisma.purchaseAttempt.count({ where: { saleId } }),
-      prisma.purchaseAttempt.count({
-        where: { saleId, validationStatus: 'valid' },
-      }),
-      prisma.purchaseAttempt.count({
-        where: { saleId, validationStatus: 'valid', accepted: true },
-      }),
-      prisma.purchaseAttempt.count({
-        where: {
-          saleId,
-          validationStatus: 'valid',
-          accepted: true,
-          confirmations: { gte: sale.finalityDepth },
-        },
-      }),
-    ])
+  let totalAttempts = 0
+  let validAttempts = 0
+  let acceptedAttempts = 0
+  let finalAttempts = 0
+
+  if (useEvmPurchases()) {
+    const computed = await getEvmSaleComputed(sale)
+    totalAttempts = computed.attempts.length
+    validAttempts = computed.validAttempts.length
+    acceptedAttempts = computed.validAttempts.length
+    finalAttempts = computed.finalAttempts.length
+  } else {
+    ;[totalAttempts, validAttempts, acceptedAttempts, finalAttempts] =
+      await Promise.all([
+        prisma.purchaseAttempt.count({ where: { saleId } }),
+        prisma.purchaseAttempt.count({
+          where: { saleId, validationStatus: 'valid' },
+        }),
+        prisma.purchaseAttempt.count({
+          where: { saleId, validationStatus: 'valid', accepted: true },
+        }),
+        prisma.purchaseAttempt.count({
+          where: {
+            saleId,
+            validationStatus: 'valid',
+            accepted: true,
+            confirmations: { gte: sale.finalityDepth },
+          },
+        }),
+      ])
+  }
 
   return {
     saleId,
@@ -157,6 +171,32 @@ async function getSaleStats(saleId: string): Promise<SaleStats | null> {
 async function getMyStatus(saleId: string, txid: string) {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } })
   if (!sale) return { found: false, message: 'Sale not found' }
+
+  if (useEvmPurchases()) {
+    const attempt = await findEvmAttemptByTxid(sale, txid)
+    if (!attempt) {
+      return {
+        found: false,
+        txid,
+        message: 'Transaction not found',
+      }
+    }
+
+    return {
+      found: true,
+      txid: attempt.txid,
+      validationStatus: attempt.validationStatus,
+      invalidReason: attempt.invalidReason,
+      accepted: attempt.accepted,
+      confirmations: attempt.confirmations,
+      provisionalRank: attempt.provisionalRank,
+      finalRank: attempt.finalRank,
+      isWinner:
+        attempt.finalRank !== null && attempt.finalRank <= sale.supplyTotal,
+      acceptingBlockHash: attempt.blockHash,
+      detectedAt: new Date(Number(attempt.blockTimestamp) * 1000).toISOString(),
+    }
+  }
 
   const attempt = await prisma.purchaseAttempt.findFirst({
     where: { saleId, txid },

@@ -17,7 +17,7 @@ export default function Home() {
           <span className="text-kaspa-primary">Tickasting</span>
         </h1>
         <p className="text-xl text-gray-400 mb-8">
-          Fair Ticketing Powered by Kaspa
+          Fair Ticketing Powered by Kasplex EVM
         </p>
         <div className="bg-gray-800 rounded-lg p-6 max-w-md">
           <p className="text-sm text-gray-300 mb-4">
@@ -30,7 +30,7 @@ export default function Home() {
               Deterministic Ordering
             </span>
             <span className="px-3 py-1 bg-kaspa-primary/20 text-kaspa-primary rounded text-sm">
-              Anti-Bot PoW
+              On-Chain USDC Purchase
             </span>
           </div>
         </div>

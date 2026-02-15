@@ -1,0 +1,170 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+
+interface EvmProvider {
+  request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>
+  on?: (event: string, handler: (data: unknown) => void) => void
+  removeListener?: (event: string, handler: (data: unknown) => void) => void
+}
+
+declare global {
+  interface Window {
+    ethereum?: EvmProvider
+  }
+}
+
+const PAYMENT_TOKEN_ADDRESS =
+  process.env['NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS'] ||
+  '0x593Cd4124ffE9D11B3114259fbC170a5759E0f54'
+const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
+const KASPLEX_CHAIN_ID_HEX = `0x${KASPLEX_CHAIN_ID.toString(16)}`
+
+function padHex(value: string): string {
+  return value.padStart(64, '0')
+}
+
+function encodeErc20Transfer(to: string, amount: bigint): string {
+  const methodId = 'a9059cbb'
+  const toArg = padHex(to.toLowerCase().replace(/^0x/, ''))
+  const valueArg = padHex(amount.toString(16))
+  return `0x${methodId}${toArg}${valueArg}`
+}
+
+export interface UseEvmWalletResult {
+  isInstalled: boolean
+  isConnected: boolean
+  address: string | null
+  chainId: number | null
+  loading: boolean
+  error: string | null
+  connect: () => Promise<void>
+  disconnect: () => void
+  ensureKasplexChain: () => Promise<void>
+  sendUsdcTransfer: (toAddress: string, amount: bigint) => Promise<string>
+}
+
+export function useEvmWallet(): UseEvmWalletResult {
+  const [isInstalled, setIsInstalled] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [address, setAddress] = useState<string | null>(null)
+  const [chainId, setChainId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setIsInstalled(typeof window !== 'undefined' && !!window.ethereum)
+  }, [])
+
+  const syncWalletState = useCallback(async () => {
+    if (!window.ethereum) return
+
+    const [accountsRaw, chainIdRaw] = await Promise.all([
+      window.ethereum.request({ method: 'eth_accounts' }),
+      window.ethereum.request({ method: 'eth_chainId' }),
+    ])
+    const accounts = accountsRaw as string[]
+    const chainIdHex = chainIdRaw as string
+    const nextChainId = parseInt(chainIdHex, 16)
+
+    setAddress(accounts[0]?.toLowerCase() || null)
+    setIsConnected(accounts.length > 0)
+    setChainId(Number.isFinite(nextChainId) ? nextChainId : null)
+  }, [])
+
+  const connect = useCallback(async () => {
+    if (!window.ethereum) {
+      setError('MetaMask not detected')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await window.ethereum.request({ method: 'eth_requestAccounts' })
+      await syncWalletState()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect wallet')
+    } finally {
+      setLoading(false)
+    }
+  }, [syncWalletState])
+
+  const disconnect = useCallback(() => {
+    setIsConnected(false)
+    setAddress(null)
+  }, [])
+
+  const ensureKasplexChain = useCallback(async () => {
+    if (!window.ethereum) throw new Error('MetaMask not detected')
+    const chainIdRaw = (await window.ethereum.request({ method: 'eth_chainId' })) as string
+    if (parseInt(chainIdRaw, 16) === KASPLEX_CHAIN_ID) return
+
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: KASPLEX_CHAIN_ID_HEX }],
+    })
+    await syncWalletState()
+  }, [syncWalletState])
+
+  const sendUsdcTransfer = useCallback(
+    async (toAddress: string, amount: bigint): Promise<string> => {
+      if (!window.ethereum) throw new Error('MetaMask not detected')
+      if (!address) throw new Error('Wallet not connected')
+      if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) {
+        throw new Error('Invalid EVM treasury address')
+      }
+      await ensureKasplexChain()
+
+      const data = encodeErc20Transfer(toAddress, amount)
+      const txHash = (await window.ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: address,
+            to: PAYMENT_TOKEN_ADDRESS,
+            value: '0x0',
+            data,
+          },
+        ],
+      })) as string
+
+      return txHash.toLowerCase()
+    },
+    [address, ensureKasplexChain]
+  )
+
+  useEffect(() => {
+    if (!window.ethereum) return
+    void syncWalletState()
+
+    const handleAccountsChanged = (accounts: unknown) => {
+      const list = accounts as string[]
+      setAddress(list[0]?.toLowerCase() || null)
+      setIsConnected(list.length > 0)
+    }
+    const handleChainChanged = (chainIdHex: unknown) => {
+      const parsed = parseInt(chainIdHex as string, 16)
+      setChainId(Number.isFinite(parsed) ? parsed : null)
+    }
+
+    window.ethereum.on?.('accountsChanged', handleAccountsChanged)
+    window.ethereum.on?.('chainChanged', handleChainChanged)
+    return () => {
+      window.ethereum?.removeListener?.('accountsChanged', handleAccountsChanged)
+      window.ethereum?.removeListener?.('chainChanged', handleChainChanged)
+    }
+  }, [syncWalletState])
+
+  return {
+    isInstalled,
+    isConnected,
+    address,
+    chainId,
+    loading,
+    error,
+    connect,
+    disconnect,
+    ensureKasplexChain,
+    sendUsdcTransfer,
+  }
+}

@@ -2,7 +2,7 @@
  * Claim Routes — Contract event sync + claim status
  *
  * Handles synchronization between off-chain winner determination
- * and on-chain claim/mint on EVM (Sepolia).
+ * and on-chain claim/mint on EVM (Kasplex testnet).
  *
  * Data sources:
  * - Legacy (Prisma): Manual sync via POST /claims/sync
@@ -20,6 +20,7 @@ import {
   getPonderClaims,
   formatPonderClaim,
 } from '../ponder-client.js'
+import { getEvmSaleComputed, useEvmPurchases } from '../evm-purchases.js'
 
 export async function claimRoutes(fastify: FastifyInstance) {
   // Register an on-chain claim (called by backend after detecting TicketClaimed event)
@@ -56,13 +57,24 @@ export async function claimRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      // Find the purchase attempt by Kaspa txid
-      const attempt = await prisma.purchaseAttempt.findFirst({
-        where: { saleId, txid: data.kaspaTxid },
-      })
-      if (!attempt) {
-        reply.status(404)
-        return { error: 'Purchase attempt not found for kaspaTxid' }
+      let buyerAddrHash = ''
+      if (useEvmPurchases()) {
+        const computed = await getEvmSaleComputed(sale)
+        const winner = computed.winners.find((w) => w.txid.toLowerCase() === data.kaspaTxid.toLowerCase())
+        if (!winner) {
+          reply.status(404)
+          return { error: 'Winner not found for payment tx hash' }
+        }
+        buyerAddrHash = winner.buyerAddrHash
+      } else {
+        const attempt = await prisma.purchaseAttempt.findFirst({
+          where: { saleId, txid: data.kaspaTxid },
+        })
+        if (!attempt) {
+          reply.status(404)
+          return { error: 'Purchase attempt not found for kaspaTxid' }
+        }
+        buyerAddrHash = attempt.buyerAddrHash ?? ''
       }
 
       // Find ticket type by code
@@ -98,7 +110,7 @@ export async function claimRoutes(fastify: FastifyInstance) {
           saleId,
           ticketTypeId: ticketType?.id ?? null,
           ownerAddress: data.claimerEvmAddress,
-          ownerAddrHash: attempt.buyerAddrHash ?? '',
+          ownerAddrHash: buyerAddrHash,
           originTxid: data.kaspaTxid,
           claimTxid: data.claimTxHash,
           tokenId: data.tokenId,
@@ -197,16 +209,21 @@ export async function claimRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      // Get off-chain winners (final rank <= supply)
-      const winners = await prisma.purchaseAttempt.findMany({
-        where: {
-          saleId,
-          validationStatus: { in: ['valid', 'valid_fallback'] },
-          accepted: true,
-          finalRank: { not: null, lte: sale.supplyTotal },
-        },
-        orderBy: { finalRank: 'asc' },
-      })
+      const winners = useEvmPurchases()
+        ? (await getEvmSaleComputed(sale)).winners.map((w, i) => ({
+            txid: w.txid,
+            finalRank: i + 1,
+            buyerAddrHash: w.buyerAddrHash,
+          }))
+        : await prisma.purchaseAttempt.findMany({
+            where: {
+              saleId,
+              validationStatus: { in: ['valid', 'valid_fallback'] },
+              accepted: true,
+              finalRank: { not: null, lte: sale.supplyTotal },
+            },
+            orderBy: { finalRank: 'asc' },
+          })
 
       // Get on-chain claimed data — prefer Ponder if available
       let claimSource = 'legacy'

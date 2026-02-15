@@ -3,6 +3,7 @@ import cors from '@fastify/cors'
 import websocket from '@fastify/websocket'
 import { prisma } from './db.js'
 import { USE_PONDER_DATA, ponderTablesExist } from './ponder-client.js'
+import { useEvmPurchases } from './evm-purchases.js'
 import { eventsRoutes } from './routes/events.js'
 import { salesRoutes } from './routes/sales.js'
 import { websocketRoutes } from './routes/websocket.js'
@@ -47,6 +48,7 @@ async function main() {
       db: dbStatus,
       ponder: ponderStatus,
       usePonderData: USE_PONDER_DATA,
+      purchaseMode: useEvmPurchases() ? 'evm' : 'legacy',
     }
   })
 

@@ -4,6 +4,17 @@ import { useState, useEffect, use } from 'react'
 import { useSaleWebSocket } from '@/hooks/useSaleWebSocket'
 import { getSale, getTicketTypes, type Sale, type TicketType } from '@/lib/api'
 
+const PAYMENT_SYMBOL = process.env['NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL'] || 'USDC'
+const PAYMENT_DECIMALS = Number(process.env['NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS'] || '6')
+
+function formatTokenAmount(raw: bigint): string {
+  const base = 10n ** BigInt(PAYMENT_DECIMALS)
+  const whole = raw / base
+  const frac = raw % base
+  const fracText = frac.toString().padStart(PAYMENT_DECIMALS, '0').replace(/0+$/, '')
+  return fracText.length > 0 ? `${whole.toString()}.${fracText}` : whole.toString()
+}
+
 interface PageProps {
   params: Promise<{ saleId: string }>
 }
@@ -189,10 +200,7 @@ export default function LiveDashboard({ params }: PageProps) {
               <div className="flex justify-between">
                 <span className="text-gray-400">Price</span>
                 <span className="text-white">
-                  {sale
-                    ? (Number(BigInt(sale.ticketPriceSompi)) / 100_000_000).toFixed(2)
-                    : 0}{' '}
-                  KAS
+                  {sale ? formatTokenAmount(BigInt(sale.ticketPriceSompi)) : '0'} {PAYMENT_SYMBOL}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -214,7 +222,7 @@ export default function LiveDashboard({ params }: PageProps) {
               />
               <QueueStep
                 step={2}
-                label="Validated (PoW OK)"
+                label="Validated (Amount OK)"
                 count={stats?.validAttempts || 0}
                 active={(stats?.validAttempts || 0) > 0}
               />
@@ -238,7 +246,7 @@ export default function LiveDashboard({ params }: PageProps) {
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>
-            Queue order is determined by on-chain acceptance.{' '}
+            Queue order is determined by on-chain EVM ordering.{' '}
             <span className="text-kaspa-primary">No server manipulation possible.</span>
           </p>
           {stats?.timestamp && (

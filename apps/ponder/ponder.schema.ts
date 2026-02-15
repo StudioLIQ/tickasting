@@ -2,7 +2,7 @@ import { index, onchainTable, onchainEnum, relations } from "ponder";
 
 /**
  * Ponder schema for TickastingSale contract events.
- * These tables store on-chain indexed data from Sepolia.
+ * These tables store on-chain indexed data from Kasplex testnet.
  * The API server reads from these tables for domain logic.
  */
 
@@ -81,6 +81,27 @@ export const tokenOwnership = onchainTable(
   }),
   (table) => ({
     ownerIdx: index("token_owner_idx").on(table.owner),
+  }),
+);
+
+export const paymentTransfersOnchain = onchainTable(
+  "payment_transfers_onchain",
+  (t) => ({
+    id: t.text().primaryKey(),                 // `${txHash}-${logIndex}`
+    tokenAddress: t.hex().notNull(),           // ERC-20 address
+    fromAddress: t.hex().notNull(),            // payer
+    toAddress: t.hex().notNull(),              // treasury
+    value: t.bigint().notNull(),               // token units (USDC decimals)
+    txHash: t.hex().notNull(),
+    blockHash: t.hex().notNull(),
+    blockNumber: t.bigint().notNull(),
+    blockTimestamp: t.bigint().notNull(),
+    logIndex: t.bigint().notNull(),
+  }),
+  (table) => ({
+    toIdx: index("pay_to_idx").on(table.toAddress),
+    txIdx: index("pay_tx_idx").on(table.txHash),
+    blockIdx: index("pay_block_idx").on(table.blockNumber),
   }),
 );
 

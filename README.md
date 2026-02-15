@@ -1,6 +1,6 @@
 # Tickasting
 
-Fair ticketing engine powered by Kaspa acceptance ordering and deterministic ranking.
+Fair ticketing engine powered by Kasplex EVM on-chain ordering and deterministic ranking.
 
 > The server does not decide queue order. The chain data does.
 
@@ -9,23 +9,16 @@ Fair ticketing engine powered by Kaspa acceptance ordering and deterministic ran
 Tickasting is a ticketing system designed to make queue ordering reproducible and auditable.
 
 - Purchase attempts are validated from on-chain data.
-- Ranking is deterministic (`acceptingBlueScore` then `txid`).
+- Ranking is deterministic (`blockNumber` then `logIndex` then `txHash`).
 - Buyers can verify outcomes from published allocation data.
-- Optional claim/mint flow is indexed from EVM contract events.
-
-Important distinction:
-
-- Not "fully on-chain contract-side ranking"
-- Yes "on-chain-data-driven ranking" from Kaspa acceptance metadata
+- Payment and claim/mint flows are both indexed from EVM events.
 
 ## Current Runtime Topology
 
-Tickasting currently runs with two index layers:
+Tickasting runs with one active indexing layer:
 
-- `apps/indexer`: Kaspa transaction detection/validation/ordering (required for purchase flow)
-- `apps/ponder`: EVM contract event indexing for claim data
-
-Target architecture is migrating to Ponder-first for indexing responsibilities, but Kaspa scanning is still handled by `apps/indexer` today.
+- `apps/ponder`: EVM event indexing for payment + claim data
+- `apps/indexer`: legacy service (not used in EVM purchase mode)
 
 Details: `docs/architecture.md`, `docs/migration-ponder.md`
 
@@ -35,11 +28,11 @@ Details: `docs/architecture.md`, `docs/migration-ponder.md`
 apps/
   web/       Next.js frontend
   api/       Fastify API + WebSocket + domain logic
-  indexer/   Kaspa scanner/validator/orderer (active for core flow)
-  ponder/    EVM event indexer (claims/ownership)
+  indexer/   Legacy Kaspa scanner (deprecated)
+  ponder/    EVM event indexer (payment/claims/ownership)
 contracts/   TickastingSale Solidity contract (Kasplex testnet)
 packages/
-  shared/    Shared libs (payload, PoW, merkle, kaspa adapter)
+  shared/    Shared libs (merkle/ticket/utility)
 infra/
   docker-compose.yml   Local postgres/redis
 ```
@@ -52,7 +45,7 @@ infra/
 
 ## Quick Start (Local Core)
 
-This path runs core flow locally: `web + api + indexer + postgres`.
+This path runs core flow locally: `web + api + ponder + postgres`.
 
 ### 1) Install
 
@@ -85,15 +78,18 @@ API_HOST=0.0.0.0
 API_PORT=4001
 INDEXER_PORT=4002
 INDEXER_POLL_INTERVAL_MS=5000
-KASPA_NETWORK=testnet
-KASPA_REST_BASE_URL=https://api-tn10.kaspa.org
+PURCHASE_MODE=evm
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
-NEXT_PUBLIC_KASPA_EXPLORER_URL=https://explorer-tn10.kaspa.org
+NEXT_PUBLIC_EVM_EXPLORER_URL=https://explorer.testnet.kasplextest.xyz
+NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
+NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL=USDC
+NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS=6
+NEXT_PUBLIC_KASPLEX_CHAIN_ID=167012
 PAYMENT_CURRENCY=USDC
 PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
 PAYMENT_CHAIN=kasplex-testnet
-USE_PONDER_DATA=false
+USE_PONDER_DATA=true
 ```
 
 ### 5) Run services
@@ -113,7 +109,7 @@ pnpm --filter @tickasting/api dev
 Terminal 3:
 
 ```bash
-pnpm --filter @tickasting/indexer dev
+pnpm --filter @tickasting/ponder dev
 ```
 
 Terminal 4:
@@ -126,18 +122,17 @@ pnpm --filter @tickasting/web dev
 
 ```bash
 curl http://localhost:4001/health
-curl http://localhost:4002/health
-curl http://localhost:4002/stats
+curl http://localhost:42069/health
+curl http://localhost:42069/ready
 ```
 
 Web app: `http://localhost:3000`
 
-## Full Stack Dev (Including Ponder)
-
-If you also want EVM claim indexing locally:
+## Ponder Setup
 
 ```dotenv
 PONDER_RPC_URL_167012=https://rpc.kasplextest.xyz
+USDC_TRANSFER_START_BLOCK=0
 TICKASTING_CONTRACT_ADDRESS=0x<deployed-address>
 TICKASTING_START_BLOCK=<deploy-block>
 USE_PONDER_DATA=true
@@ -174,11 +169,11 @@ curl -X POST http://localhost:4001/v1/events \
 curl -X POST http://localhost:4001/v1/events/<eventId>/sales \
   -H "Content-Type: application/json" \
   -d '{
-    "network":"testnet",
-    "treasuryAddress":"kaspa:<YOUR_TESTNET_TREASURY_ADDRESS>",
-    "ticketPriceSompi":"100000000",
+    "network":"kasplex-testnet",
+    "treasuryAddress":"0x<YOUR_EVM_TREASURY_ADDRESS>",
+    "ticketPriceSompi":"1000000",
     "supplyTotal":10,
-    "powDifficulty":8
+    "finalityDepth":12
   }'
 ```
 
@@ -242,7 +237,7 @@ curl -X POST http://localhost:4001/v1/sales/<saleId>/publish
 ### Health
 
 - `GET /health` (API)
-- `GET /health` and `GET /stats` (Indexer)
+- `GET /health`, `GET /ready`, `GET /status` (Ponder)
 
 ## Environment Variables
 
@@ -250,16 +245,16 @@ Commonly used variables:
 
 - `DATABASE_URL` Postgres DSN
 - `API_HOST`, `API_PORT` API listen config
-- `INDEXER_PORT`, `INDEXER_POLL_INTERVAL_MS` indexer config
-- `KASPA_NETWORK` (`testnet` or `mainnet`)
-- `KASPA_REST_BASE_URL` Kaspa scanner REST endpoint (`https://api-tn10.kaspa.org` for testnet)
+- `PURCHASE_MODE=evm` EVM purchase ordering mode
 - `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets
-- `NEXT_PUBLIC_KASPA_EXPLORER_URL` web explorer base URL for tx/block links
+- `NEXT_PUBLIC_EVM_EXPLORER_URL` web explorer base URL for tx/block links
+- `NEXT_PUBLIC_PAYMENT_TOKEN_ADDRESS`, `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL`, `NEXT_PUBLIC_PAYMENT_TOKEN_DECIMALS`
+- `NEXT_PUBLIC_KASPLEX_CHAIN_ID` expected chain id for wallet UX
 - `WS_BROADCAST_INTERVAL_MS` API websocket broadcast interval
 - `TICKET_SECRET` ticket QR signing secret
 - `USE_PONDER_DATA` API claim data source switch
 - `PONDER_SCHEMA` schema name for ponder tables (default `public`)
-- `PONDER_RPC_URL_167012`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
+- `PONDER_RPC_URL_167012`, `USDC_TRANSFER_START_BLOCK`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
 - `CONTRACT_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY` contract deployment
 - `PAYMENT_CURRENCY`, `PAYMENT_TOKEN_ADDRESS`, `PAYMENT_CHAIN` payment config (USDC on Kasplex testnet)
 
@@ -270,7 +265,7 @@ See `.env.example` and the Quick Start section in this README for concrete setup
 ```bash
 pnpm test
 pnpm --filter @tickasting/shared test
-pnpm --filter @tickasting/indexer test
+pnpm --filter @tickasting/ponder typecheck
 pnpm --filter @tickasting/api test
 ```
 

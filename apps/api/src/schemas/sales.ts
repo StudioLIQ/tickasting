@@ -20,7 +20,7 @@ export const updateTicketTypeSchema = z.object({
 })
 
 export const createSaleSchema = z.object({
-  network: z.enum(['mainnet', 'testnet']).default('testnet'),
+  network: z.enum(['kasplex-testnet', 'kasplex-mainnet', 'testnet', 'mainnet']).default('kasplex-testnet'),
   treasuryAddress: z.string().min(1),
   ticketPriceSompi: z.string().regex(/^\d+$/, 'Must be a valid sompi amount'),
   supplyTotal: z.number().int().positive(),

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { createSaleSchema, ticketTypeSchema, updateTicketTypeSchema } from '../schemas/sales.js'
+import { getEvmSaleComputed, findEvmAttemptByTxid, useEvmPurchases } from '../evm-purchases.js'
 import {
   computeMerkleRoot,
   generateMerkleProof,
@@ -370,6 +371,36 @@ export async function salesRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
+      if (useEvmPurchases()) {
+        const attempt = await findEvmAttemptByTxid(sale, txid)
+        if (!attempt) {
+          return {
+            found: false,
+            saleId,
+            txid,
+            message: 'Transaction not found. It may not have been indexed yet.',
+          }
+        }
+
+        return {
+          found: true,
+          saleId,
+          txid: attempt.txid,
+          validationStatus: attempt.validationStatus,
+          invalidReason: attempt.invalidReason,
+          accepted: attempt.accepted,
+          confirmations: attempt.confirmations,
+          provisionalRank: attempt.provisionalRank,
+          finalRank: attempt.finalRank,
+          isWinner:
+            attempt.finalRank !== null && attempt.finalRank <= sale.supplyTotal,
+          isFallback: false,
+          acceptingBlockHash: attempt.blockHash,
+          detectedAt: new Date(Number(attempt.blockTimestamp) * 1000).toISOString(),
+          lastCheckedAt: null,
+        }
+      }
+
       const attempt = await prisma.purchaseAttempt.findFirst({
         where: { saleId, txid },
       })
@@ -415,8 +446,53 @@ export async function salesRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      // Get all valid, accepted, final attempts
-      // Include both 'valid' and 'valid_fallback' statuses
+      if (useEvmPurchases()) {
+        const computed = await getEvmSaleComputed(sale)
+
+        const winners: AllocationWinner[] = computed.winners.map((a, i) => ({
+          finalRank: i + 1,
+          txid: a.txid,
+          acceptingBlockHash: a.blockHash,
+          acceptingBlueScore: a.blockNumber.toString(),
+          confirmations: a.confirmations,
+          buyerAddrHash: a.buyerAddrHash,
+        }))
+
+        const merkleLeaves: MerkleLeaf[] = winners.map((w) => ({
+          finalRank: w.finalRank,
+          txid: w.txid,
+          acceptingBlockHash: w.acceptingBlockHash,
+          acceptingBlueScore: w.acceptingBlueScore,
+          buyerAddrHash: w.buyerAddrHash,
+        }))
+        const computedMerkleRoot = winners.length > 0 ? computeMerkleRoot(merkleLeaves) : null
+        const merkleRoot = sale.merkleRoot ?? computedMerkleRoot
+
+        const snapshot: AllocationSnapshot = {
+          saleId: sale.id,
+          network: sale.network,
+          treasuryAddress: sale.treasuryAddress,
+          ticketPriceSompi: sale.ticketPriceSompi.toString(),
+          supplyTotal: sale.supplyTotal,
+          finalityDepth: sale.finalityDepth,
+          pow: { algo: 'none', difficulty: 0 },
+          orderingRule: {
+            primary: 'blockNumber asc',
+            tiebreaker: 'logIndex asc, txHash asc',
+          },
+          generatedAt: new Date().toISOString(),
+          totalAttempts: computed.attempts.length,
+          validAttempts: computed.validAttempts.length,
+          winners,
+          losersCount: Math.max(0, computed.finalAttempts.length - sale.supplyTotal),
+          merkleRoot,
+          commitTxid: sale.commitTxid,
+        }
+
+        return snapshot
+      }
+
+      // Legacy Kaspa path
       const attempts = await prisma.purchaseAttempt.findMany({
         where: {
           saleId,
@@ -427,13 +503,11 @@ export async function salesRoutes(fastify: FastifyInstance) {
         orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
       })
 
-      // Get total counts
       const [totalAttempts, validAttempts] = await Promise.all([
         prisma.purchaseAttempt.count({ where: { saleId } }),
         prisma.purchaseAttempt.count({ where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] } } }),
       ])
 
-      // Build winners list
       const winners: AllocationWinner[] = attempts
         .slice(0, sale.supplyTotal)
         .map((a, i) => ({
@@ -495,24 +569,37 @@ export async function salesRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      const [totalAttempts, validAttempts, acceptedAttempts, finalAttempts] =
-        await Promise.all([
-          prisma.purchaseAttempt.count({ where: { saleId } }),
-          prisma.purchaseAttempt.count({
-            where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] } },
-          }),
-          prisma.purchaseAttempt.count({
-            where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] }, accepted: true },
-          }),
-          prisma.purchaseAttempt.count({
-            where: {
-              saleId,
-              validationStatus: { in: ['valid', 'valid_fallback'] },
-              accepted: true,
-              confirmations: { gte: sale.finalityDepth },
-            },
-          }),
-        ])
+      let totalAttempts = 0
+      let validAttempts = 0
+      let acceptedAttempts = 0
+      let finalAttempts = 0
+
+      if (useEvmPurchases()) {
+        const computed = await getEvmSaleComputed(sale)
+        totalAttempts = computed.attempts.length
+        validAttempts = computed.validAttempts.length
+        acceptedAttempts = computed.validAttempts.length
+        finalAttempts = computed.finalAttempts.length
+      } else {
+        ;[totalAttempts, validAttempts, acceptedAttempts, finalAttempts] =
+          await Promise.all([
+            prisma.purchaseAttempt.count({ where: { saleId } }),
+            prisma.purchaseAttempt.count({
+              where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] } },
+            }),
+            prisma.purchaseAttempt.count({
+              where: { saleId, validationStatus: { in: ['valid', 'valid_fallback'] }, accepted: true },
+            }),
+            prisma.purchaseAttempt.count({
+              where: {
+                saleId,
+                validationStatus: { in: ['valid', 'valid_fallback'] },
+                accepted: true,
+                confirmations: { gte: sale.finalityDepth },
+              },
+            }),
+          ])
+      }
 
       return {
         saleId,
@@ -565,26 +652,35 @@ export async function salesRoutes(fastify: FastifyInstance) {
       // Compute merkle root from winners if not already set
       let merkleRoot = sale.merkleRoot
       if (!merkleRoot) {
-        const attempts = await prisma.purchaseAttempt.findMany({
-          where: {
-            saleId,
-            validationStatus: { in: ['valid', 'valid_fallback'] },
-            accepted: true,
-            confirmations: { gte: sale.finalityDepth },
-          },
-          orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
-        })
+        const merkleLeaves: MerkleLeaf[] = useEvmPurchases()
+          ? (await getEvmSaleComputed(sale)).winners.map((a, i) => ({
+              finalRank: i + 1,
+              txid: a.txid,
+              acceptingBlockHash: a.blockHash,
+              acceptingBlueScore: a.blockNumber.toString(),
+              buyerAddrHash: a.buyerAddrHash,
+            }))
+          : (
+              await prisma.purchaseAttempt.findMany({
+                where: {
+                  saleId,
+                  validationStatus: { in: ['valid', 'valid_fallback'] },
+                  accepted: true,
+                  confirmations: { gte: sale.finalityDepth },
+                },
+                orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
+              })
+            )
+              .slice(0, sale.supplyTotal)
+              .map((a, i) => ({
+                finalRank: i + 1,
+                txid: a.txid,
+                acceptingBlockHash: a.acceptingBlockHash,
+                acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
+                buyerAddrHash: a.buyerAddrHash,
+              }))
 
-        const winners = attempts.slice(0, sale.supplyTotal)
-        const merkleLeaves: MerkleLeaf[] = winners.map((a, i) => ({
-          finalRank: i + 1,
-          txid: a.txid,
-          acceptingBlockHash: a.acceptingBlockHash,
-          acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
-          buyerAddrHash: a.buyerAddrHash,
-        }))
-
-        merkleRoot = winners.length > 0 ? computeMerkleRoot(merkleLeaves) : null
+        merkleRoot = merkleLeaves.length > 0 ? computeMerkleRoot(merkleLeaves) : null
       }
 
       // Update sale with commit txid and merkle root
@@ -624,18 +720,22 @@ export async function salesRoutes(fastify: FastifyInstance) {
         return { error: 'Sale not found' }
       }
 
-      // Get all final winners
-      const attempts = await prisma.purchaseAttempt.findMany({
-        where: {
-          saleId,
-          validationStatus: { in: ['valid', 'valid_fallback'] },
-          accepted: true,
-          confirmations: { gte: sale.finalityDepth },
-        },
-        orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
-      })
-
-      const winners = attempts.slice(0, sale.supplyTotal)
+      const evmMode = useEvmPurchases()
+      const evmWinners = evmMode ? (await getEvmSaleComputed(sale)).winners : []
+      const legacyWinners = evmMode
+        ? []
+        : (
+            await prisma.purchaseAttempt.findMany({
+              where: {
+                saleId,
+                validationStatus: { in: ['valid', 'valid_fallback'] },
+                accepted: true,
+                confirmations: { gte: sale.finalityDepth },
+              },
+              orderBy: [{ acceptingBlueScore: 'asc' }, { txid: 'asc' }],
+            })
+          ).slice(0, sale.supplyTotal)
+      const winners = evmMode ? evmWinners : legacyWinners
 
       // Find the requested txid
       const leafIndex = winners.findIndex((w) => w.txid.toLowerCase() === txid.toLowerCase())
@@ -648,13 +748,21 @@ export async function salesRoutes(fastify: FastifyInstance) {
       }
 
       // Build merkle leaves
-      const merkleLeaves: MerkleLeaf[] = winners.map((a, i) => ({
-        finalRank: i + 1,
-        txid: a.txid,
-        acceptingBlockHash: a.acceptingBlockHash,
-        acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
-        buyerAddrHash: a.buyerAddrHash,
-      }))
+      const merkleLeaves: MerkleLeaf[] = evmMode
+        ? evmWinners.map((a, i) => ({
+            finalRank: i + 1,
+            txid: a.txid,
+            acceptingBlockHash: a.blockHash,
+            acceptingBlueScore: a.blockNumber.toString(),
+            buyerAddrHash: a.buyerAddrHash,
+          }))
+        : legacyWinners.map((a, i) => ({
+            finalRank: i + 1,
+            txid: a.txid,
+            acceptingBlockHash: a.acceptingBlockHash,
+            acceptingBlueScore: a.acceptingBlueScore?.toString() ?? null,
+            buyerAddrHash: a.buyerAddrHash,
+          }))
 
       // Generate proof
       const proof = generateMerkleProof(merkleLeaves, leafIndex)

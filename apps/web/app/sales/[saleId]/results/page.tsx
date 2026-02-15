@@ -12,11 +12,11 @@ import {
   type TicketType,
 } from '@/lib/api'
 
-const KASPA_EXPLORER_BASE_URL =
-  (process.env.NEXT_PUBLIC_KASPA_EXPLORER_URL || 'https://explorer-tn10.kaspa.org').replace(/\/$/, '')
+const EVM_EXPLORER_BASE_URL =
+  (process.env.NEXT_PUBLIC_EVM_EXPLORER_URL || 'https://explorer.testnet.kasplextest.xyz').replace(/\/$/, '')
 
 function getKaspaTxUrl(txid: string): string {
-  return `${KASPA_EXPLORER_BASE_URL}/txs/${txid}`
+  return `${EVM_EXPLORER_BASE_URL}/tx/${txid}`
 }
 
 interface PageProps {
@@ -287,7 +287,7 @@ export default function ResultsPage({ params }: PageProps) {
                   <th className="pb-3 pr-4">Rank</th>
                   <th className="pb-3 pr-4">Transaction ID</th>
                   <th className="pb-3 pr-4">Block Hash</th>
-                  <th className="pb-3">Blue Score</th>
+                  <th className="pb-3">Block Number</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
@@ -351,7 +351,7 @@ export default function ResultsPage({ params }: PageProps) {
               <p className="text-gray-500 text-xs mt-3">
                 The merkle root is a cryptographic commitment of all winners.
                 {allocation.commitTxid && (
-                  <> It has been permanently recorded on the Kaspa blockchain.</>
+                  <> It has been permanently recorded on Kasplex EVM testnet.</>
                 )}
                 {' '}Any change to the winners list would produce a different merkle root.
               </p>
@@ -384,7 +384,7 @@ export default function ResultsPage({ params }: PageProps) {
           </div>
           <p className="mt-4 text-gray-500">
             The ordering is deterministic and can be independently verified using
-            on-chain data. No server manipulation is possible.
+            on-chain EVM data. No server manipulation is possible.
           </p>
         </div>
       </div>

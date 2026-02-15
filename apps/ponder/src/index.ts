@@ -4,6 +4,7 @@ import {
   ticketTypesOnchain,
   claimsOnchain,
   tokenOwnership,
+  paymentTransfersOnchain,
 } from "ponder:schema";
 
 // ─── SaleCreated ───
@@ -120,4 +121,35 @@ ponder.on("TickastingSale:Transfer", async ({ event, context }) => {
       blockNumber: event.block.number,
       blockTimestamp: event.block.timestamp,
     });
+});
+
+// ─── PaymentToken Transfer (USDC purchase attempts) ───
+ponder.on("PaymentToken:Transfer", async ({ event, context }) => {
+  const logIndex =
+    typeof event.log.logIndex === "bigint"
+      ? event.log.logIndex
+      : BigInt(event.log.logIndex);
+
+  const id = `${event.transaction.hash.toLowerCase()}-${logIndex.toString()}`;
+  const tokenAddress = event.log.address.toLowerCase() as `0x${string}`;
+  const fromAddress = event.args.from.toLowerCase() as `0x${string}`;
+  const toAddress = event.args.to.toLowerCase() as `0x${string}`;
+  const txHash = event.transaction.hash.toLowerCase() as `0x${string}`;
+  const blockHash = event.block.hash.toLowerCase() as `0x${string}`;
+
+  await context.db
+    .insert(paymentTransfersOnchain)
+    .values({
+      id,
+      tokenAddress,
+      fromAddress,
+      toAddress,
+      value: event.args.value,
+      txHash,
+      blockHash,
+      blockNumber: event.block.number,
+      blockTimestamp: event.block.timestamp,
+      logIndex,
+    })
+    .onConflictDoNothing();
 });

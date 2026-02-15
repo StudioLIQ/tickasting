@@ -80,7 +80,7 @@ export default function MyTicketsPage() {
         <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-6">
           {!wallet.isInstalled ? (
             <div className="text-sm text-yellow-300">
-              MetaMask is required to load your wallet tickets.
+              EVM wallet is required to load your wallet tickets.
             </div>
           ) : !wallet.isConnected ? (
             <button
@@ -88,7 +88,7 @@ export default function MyTicketsPage() {
               disabled={wallet.loading}
               className="rounded-lg bg-kaspa-primary px-4 py-2 font-semibold text-black hover:bg-kaspa-primary/90 disabled:opacity-50"
             >
-              {wallet.loading ? 'Connecting...' : 'Connect MetaMask'}
+              {wallet.loading ? 'Connecting...' : 'Connect Wallet'}
             </button>
           ) : (
             <div className="space-y-4">

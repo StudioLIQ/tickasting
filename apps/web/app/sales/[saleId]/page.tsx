@@ -243,10 +243,11 @@ export default function SalePage({ params }: PageProps) {
 
           {!wallet.isInstalled ? (
             <div className="text-yellow-400">
-              MetaMask not detected. Please install it from{' '}
+              EVM wallet not detected. Please install MetaMask from{' '}
               <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">
                 metamask.io
               </a>
+              {' '}or open this page in your wallet browser.
             </div>
           ) : !wallet.isConnected ? (
             <button
@@ -254,7 +255,7 @@ export default function SalePage({ params }: PageProps) {
               disabled={wallet.loading}
               className="bg-kaspa-primary hover:bg-kaspa-primary/80 px-4 py-2 rounded font-medium disabled:opacity-50"
             >
-              {wallet.loading ? 'Connecting...' : 'Connect MetaMask'}
+              {wallet.loading ? 'Connecting...' : 'Connect Wallet'}
             </button>
           ) : (
             <div className="space-y-2">

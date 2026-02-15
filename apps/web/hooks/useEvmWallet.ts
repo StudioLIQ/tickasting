@@ -7,6 +7,7 @@ interface EvmProvider {
   on?: (event: string, handler: (data: unknown) => void) => void
   removeListener?: (event: string, handler: (data: unknown) => void) => void
   isMetaMask?: boolean
+  providers?: EvmProvider[]
 }
 
 declare global {
@@ -20,6 +21,13 @@ const PAYMENT_TOKEN_ADDRESS =
   '0x593Cd4124ffE9D11B3114259fbC170a5759E0f54'
 const KASPLEX_CHAIN_ID = Number(process.env['NEXT_PUBLIC_KASPLEX_CHAIN_ID'] || '167012')
 const KASPLEX_CHAIN_ID_HEX = `0x${KASPLEX_CHAIN_ID.toString(16)}`
+const KASPLEX_RPC_URL = 'https://rpc.kasplextest.xyz'
+const KASPLEX_EXPLORER_URL =
+  process.env['NEXT_PUBLIC_EVM_EXPLORER_URL'] || 'https://explorer.testnet.kasplextest.xyz'
+
+interface EvmRequestError extends Error {
+  code?: number
+}
 
 function padHex(value: string): string {
   return value.padStart(64, '0')
@@ -32,10 +40,15 @@ function encodeErc20Transfer(to: string, amount: bigint): string {
   return `0x${methodId}${toArg}${valueArg}`
 }
 
-function getMetaMaskProvider(): EvmProvider | null {
+function getInjectedProvider(): EvmProvider | null {
   if (typeof window === 'undefined') return null
   const provider = window.ethereum
-  if (!provider || provider.isMetaMask !== true) return null
+  if (!provider) return null
+
+  if (Array.isArray(provider.providers) && provider.providers.length > 0) {
+    return provider.providers.find((p) => p.isMetaMask) || provider.providers[0] || null
+  }
+
   return provider
 }
 
@@ -61,11 +74,11 @@ export function useEvmWallet(): UseEvmWalletResult {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setIsInstalled(getMetaMaskProvider() !== null)
+    setIsInstalled(getInjectedProvider() !== null)
   }, [])
 
   const syncWalletState = useCallback(async () => {
-    const provider = getMetaMaskProvider()
+    const provider = getInjectedProvider()
     if (!provider) return
 
     const [accountsRaw, chainIdRaw] = await Promise.all([
@@ -82,15 +95,39 @@ export function useEvmWallet(): UseEvmWalletResult {
   }, [])
 
   const connect = useCallback(async () => {
-    const provider = getMetaMaskProvider()
+    const provider = getInjectedProvider()
     if (!provider) {
-      setError('MetaMask is required')
+      setError('EVM wallet is required')
       return
     }
     setLoading(true)
     setError(null)
     try {
       await provider.request({ method: 'eth_requestAccounts' })
+      await syncWalletState()
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: KASPLEX_CHAIN_ID_HEX }],
+      }).catch(async (switchErr: unknown) => {
+        const err = switchErr as EvmRequestError
+        if (err.code !== 4902) throw err
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: KASPLEX_CHAIN_ID_HEX,
+              chainName: 'Kasplex Testnet',
+              rpcUrls: [KASPLEX_RPC_URL],
+              blockExplorerUrls: [KASPLEX_EXPLORER_URL],
+              nativeCurrency: {
+                name: 'Kaspa',
+                symbol: 'KAS',
+                decimals: 18,
+              },
+            },
+          ],
+        })
+      })
       await syncWalletState()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect wallet')
@@ -105,23 +142,45 @@ export function useEvmWallet(): UseEvmWalletResult {
   }, [])
 
   const ensureKasplexChain = useCallback(async () => {
-    const provider = getMetaMaskProvider()
-    if (!provider) throw new Error('MetaMask is required')
+    const provider = getInjectedProvider()
+    if (!provider) throw new Error('EVM wallet is required')
 
     const chainIdRaw = (await provider.request({ method: 'eth_chainId' })) as string
     if (parseInt(chainIdRaw, 16) === KASPLEX_CHAIN_ID) return
 
-    await provider.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: KASPLEX_CHAIN_ID_HEX }],
-    })
+    try {
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: KASPLEX_CHAIN_ID_HEX }],
+      })
+    } catch (switchErr) {
+      const err = switchErr as EvmRequestError
+      if (err.code !== 4902) throw err
+
+      await provider.request({
+        method: 'wallet_addEthereumChain',
+        params: [
+          {
+            chainId: KASPLEX_CHAIN_ID_HEX,
+            chainName: 'Kasplex Testnet',
+            rpcUrls: [KASPLEX_RPC_URL],
+            blockExplorerUrls: [KASPLEX_EXPLORER_URL],
+            nativeCurrency: {
+              name: 'Kaspa',
+              symbol: 'KAS',
+              decimals: 18,
+            },
+          },
+        ],
+      })
+    }
     await syncWalletState()
   }, [syncWalletState])
 
   const sendUsdcTransfer = useCallback(
     async (toAddress: string, amount: bigint): Promise<string> => {
-      const provider = getMetaMaskProvider()
-      if (!provider) throw new Error('MetaMask is required')
+      const provider = getInjectedProvider()
+      if (!provider) throw new Error('EVM wallet is required')
       if (!address) throw new Error('Wallet not connected')
       if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) {
         throw new Error('Invalid EVM treasury address')
@@ -147,7 +206,7 @@ export function useEvmWallet(): UseEvmWalletResult {
   )
 
   useEffect(() => {
-    const provider = getMetaMaskProvider()
+    const provider = getInjectedProvider()
     if (!provider) return
 
     void syncWalletState()

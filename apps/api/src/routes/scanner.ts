@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { getEvmSaleComputed, useEvmPurchases } from '../evm-purchases.js'
+import { USE_PONDER_DATA, ponderTablesExist } from '../ponder-client.js'
 import {
   computeBuyerAddrHash,
   decodeTicketQR,
@@ -17,6 +18,7 @@ import {
 
 // Get secret from env (should be set in production)
 const TICKET_SECRET = process.env['TICKET_SECRET'] || 'dev-ticket-secret-change-in-prod'
+const PONDER_SCHEMA = process.env['PONDER_SCHEMA'] || 'public'
 
 export async function scannerRoutes(fastify: FastifyInstance) {
   // Issue ticket for a winner
@@ -374,10 +376,15 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     }
 
     const { ownerAddress, saleId, status, limit } = parseResult.data
+    const normalizedOwner = ownerAddress.toLowerCase()
+
+    if (USE_PONDER_DATA && (await ponderTablesExist())) {
+      await syncOwnerTicketsFromPonder(normalizedOwner)
+    }
 
     const tickets = await prisma.ticket.findMany({
       where: {
-        ownerAddress: { equals: ownerAddress, mode: 'insensitive' },
+        ownerAddress: { equals: normalizedOwner, mode: 'insensitive' },
         ...(saleId ? { saleId } : {}),
         ...(status ? { status } : {}),
       },
@@ -392,7 +399,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     })
 
     return {
-      ownerAddress: ownerAddress.toLowerCase(),
+      ownerAddress: normalizedOwner,
       total: tickets.length,
       tickets: tickets.map((ticket) => ({
         id: ticket.id,
@@ -615,6 +622,191 @@ export async function scannerRoutes(fastify: FastifyInstance) {
       return buildTicketNftMetadata(ticket)
     }
   )
+}
+
+interface OnchainOwnedTicketRow {
+  token_id: bigint
+  owner: string
+  sale_id: string | null
+  type_code: string | null
+  token_block_timestamp: bigint
+  claim_block_timestamp: bigint | null
+  kaspa_txid: string | null
+  claim_tx_hash: string | null
+  type_name: string | null
+  type_supply: bigint | null
+  type_price_sompi: bigint | null
+  sale_status: string | null
+  sale_organizer: string | null
+  sale_start_at: bigint | null
+  sale_end_at: bigint | null
+}
+
+function decodeTypeCode(typeCode: string | null): string {
+  if (!typeCode) return 'UNKNOWN'
+  const hex = typeCode.startsWith('0x') ? typeCode.slice(2) : typeCode
+  if (hex.length === 0) return 'UNKNOWN'
+
+  let decoded = ''
+  for (let i = 0; i + 1 < hex.length; i += 2) {
+    const byte = Number.parseInt(hex.slice(i, i + 2), 16)
+    if (Number.isNaN(byte) || byte === 0) break
+    if (byte < 32 || byte > 126) return typeCode
+    decoded += String.fromCharCode(byte)
+  }
+
+  const normalized = decoded.trim()
+  return normalized.length > 0 ? normalized : typeCode
+}
+
+function mapOnchainSaleStatus(status: string | null): 'scheduled' | 'live' | 'finalized' {
+  if (!status) return 'live'
+  if (status === 'FINALIZED') return 'finalized'
+  if (status === 'CLAIM_OPEN') return 'live'
+  return 'scheduled'
+}
+
+function toDateFromUnixSeconds(value: bigint | null): Date | null {
+  if (!value) return null
+  const millis = Number(value) * 1000
+  if (!Number.isFinite(millis) || millis <= 0) return null
+  return new Date(millis)
+}
+
+function normalizeCodeForId(code: string): string {
+  return code.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'type'
+}
+
+async function syncOwnerTicketsFromPonder(ownerAddress: string): Promise<void> {
+  const rows = await prisma.$queryRawUnsafe<OnchainOwnedTicketRow[]>(
+    `SELECT
+       t.id AS token_id,
+       t.owner AS owner,
+       t.sale_id AS sale_id,
+       t.type_code AS type_code,
+       t.block_timestamp AS token_block_timestamp,
+       c.block_timestamp AS claim_block_timestamp,
+       c.kaspa_txid AS kaspa_txid,
+       c.transaction_hash AS claim_tx_hash,
+       tt.name AS type_name,
+       tt.supply AS type_supply,
+       tt.price_sompi AS type_price_sompi,
+       s.status AS sale_status,
+       s.organizer AS sale_organizer,
+       s.start_at AS sale_start_at,
+       s.end_at AS sale_end_at
+     FROM "${PONDER_SCHEMA}"."token_ownership" t
+     LEFT JOIN "${PONDER_SCHEMA}"."claims_onchain" c
+       ON c.sale_id = t.sale_id
+      AND c.token_id = t.id
+     LEFT JOIN "${PONDER_SCHEMA}"."ticket_types_onchain" tt
+       ON tt.sale_id = t.sale_id
+      AND tt.type_code = t.type_code
+     LEFT JOIN "${PONDER_SCHEMA}"."sales_onchain" s
+       ON s.id = t.sale_id
+     WHERE lower(t.owner) = lower($1)
+     ORDER BY t.block_timestamp DESC`,
+    ownerAddress
+  )
+
+  for (const row of rows) {
+    const saleId = row.sale_id
+    if (!saleId) continue
+
+    const eventId = `onchain-event-${saleId}`
+    const eventTitle = `Tickasting On-chain Sale ${saleId.slice(0, 10)}`
+    const saleStartAt = toDateFromUnixSeconds(row.sale_start_at)
+    const saleEndAt = toDateFromUnixSeconds(row.sale_end_at)
+    const issuedAt = toDateFromUnixSeconds(row.claim_block_timestamp ?? row.token_block_timestamp) ?? new Date()
+    const typeCode = decodeTypeCode(row.type_code)
+    const typeName = row.type_name ?? `On-chain ${typeCode}`
+    const typeId = `${saleId}-type-${normalizeCodeForId(typeCode)}`
+    const priceSompi = row.type_price_sompi ?? BigInt(100_000)
+    const supply = Number(row.type_supply ?? BigInt(1))
+
+    await prisma.event.upsert({
+      where: { id: eventId },
+      update: {
+        title: eventTitle,
+        status: 'published',
+      },
+      create: {
+        id: eventId,
+        organizerId: row.sale_organizer ?? 'onchain',
+        title: eventTitle,
+        venue: 'On-chain indexed sale',
+        startAt: saleStartAt,
+        endAt: saleEndAt,
+        status: 'published',
+      },
+    })
+
+    await prisma.sale.upsert({
+      where: { id: saleId },
+      update: {
+        status: mapOnchainSaleStatus(row.sale_status),
+        startAt: saleStartAt,
+        endAt: saleEndAt,
+      },
+      create: {
+        id: saleId,
+        eventId,
+        network: 'kasplex-testnet',
+        treasuryAddress: row.sale_organizer ?? '0x0000000000000000000000000000000000000000',
+        ticketPriceSompi: priceSompi,
+        supplyTotal: Math.max(supply, 1),
+        maxPerAddress: 10,
+        powDifficulty: 18,
+        finalityDepth: 12,
+        fallbackEnabled: false,
+        startAt: saleStartAt,
+        endAt: saleEndAt,
+        status: mapOnchainSaleStatus(row.sale_status),
+      },
+    })
+
+    await prisma.ticketType.upsert({
+      where: { saleId_code: { saleId, code: typeCode } },
+      update: {
+        name: typeName,
+        priceSompi,
+        supply: Math.max(supply, 1),
+      },
+      create: {
+        id: typeId,
+        saleId,
+        code: typeCode,
+        name: typeName,
+        priceSompi,
+        supply: Math.max(supply, 1),
+        sortOrder: 0,
+        perk: { seat: typeName },
+      },
+    })
+
+    const ticketId = `onchain-${saleId}-${row.token_id.toString()}`
+    await prisma.ticket.upsert({
+      where: { id: ticketId },
+      update: {
+        ownerAddress: ownerAddress.toLowerCase(),
+        ownerAddrHash: computeBuyerAddrHash(ownerAddress),
+        claimTxid: row.claim_tx_hash,
+        tokenId: row.token_id.toString(),
+      },
+      create: {
+        id: ticketId,
+        saleId,
+        ticketTypeId: typeId,
+        ownerAddress: ownerAddress.toLowerCase(),
+        ownerAddrHash: computeBuyerAddrHash(ownerAddress),
+        originTxid: row.kaspa_txid ?? `onchain-origin-${saleId}-${row.token_id.toString()}`,
+        claimTxid: row.claim_tx_hash,
+        tokenId: row.token_id.toString(),
+        status: 'issued',
+        issuedAt,
+      },
+    })
+  }
 }
 
 interface TicketNftAttribute {

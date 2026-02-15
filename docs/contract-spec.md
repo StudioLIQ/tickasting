@@ -274,8 +274,8 @@ function _verifyProof(
 ### Environment Variables
 ```
 # Contract deployment
-CONTRACT_NETWORK=sepolia
-CONTRACT_RPC_URL=https://sepolia.infura.io/v3/<key>
+CONTRACT_NETWORK=kasplex-testnet
+CONTRACT_RPC_URL=https://rpc.kasplextest.xyz
 DEPLOYER_PRIVATE_KEY=<deployer-private-key>
 ETHERSCAN_API_KEY=<for-verification>
 
@@ -286,9 +286,9 @@ TICKASTING_CONTRACT_ADDRESS=0x...
 ### Deployment Steps
 1. `npx hardhat compile`
 2. `npx hardhat test`
-3. `npx hardhat run scripts/deploy.ts --network sepolia`
+3. `npx hardhat run scripts/deploy.ts --network kasplexTestnet`
 4. Record contract address in `.env`
-5. `npx hardhat verify --network sepolia <address>`
+5. `npx hardhat verify --network kasplexTestnet <address>`
 
 ---
 
@@ -309,7 +309,7 @@ TICKASTING_CONTRACT_ADDRESS=0x...
 
 ```
 1. Organizer creates sale on API (Kaspa treasury address)
-2. Organizer deploys TickastingSale contract on Sepolia
+2. Organizer deploys TickastingSale contract on Kasplex testnet
 3. Organizer calls createSale() + defineTicketType() on contract
 4. Sale goes live — buyers send KAS to treasury
 5. Off-chain engine computes deterministic ranking

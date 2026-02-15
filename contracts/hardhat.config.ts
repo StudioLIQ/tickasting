@@ -17,9 +17,10 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {},
-    sepolia: {
+    kasplexTestnet: {
       url: CONTRACT_RPC_URL,
       accounts: DEPLOYER_PRIVATE_KEY !== '0x' + '0'.repeat(64) ? [DEPLOYER_PRIVATE_KEY] : [],
+      chainId: 167012,
     },
   },
   etherscan: {

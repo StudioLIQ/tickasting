@@ -37,7 +37,7 @@ apps/
   api/       Fastify API + WebSocket + domain logic
   indexer/   Kaspa scanner/validator/orderer (active for core flow)
   ponder/    EVM event indexer (claims/ownership)
-contracts/   TickastingSale Solidity contract (Sepolia)
+contracts/   TickastingSale Solidity contract (Kasplex testnet)
 packages/
   shared/    Shared libs (payload, PoW, merkle, kaspa adapter)
 infra/
@@ -88,6 +88,9 @@ INDEXER_POLL_INTERVAL_MS=5000
 KASPA_NETWORK=testnet
 NEXT_PUBLIC_API_URL=http://localhost:4001
 NEXT_PUBLIC_WS_URL=ws://localhost:4001
+PAYMENT_CURRENCY=USDC
+PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54
+PAYMENT_CHAIN=kasplex-testnet
 USE_PONDER_DATA=false
 ```
 
@@ -132,7 +135,7 @@ Web app: `http://localhost:3000`
 If you also want EVM claim indexing locally:
 
 ```dotenv
-PONDER_RPC_URL_11155111=https://sepolia.infura.io/v3/<key>
+PONDER_RPC_URL_167012=https://rpc.kasplextest.xyz
 TICKASTING_CONTRACT_ADDRESS=0x<deployed-address>
 TICKASTING_START_BLOCK=<deploy-block>
 USE_PONDER_DATA=true
@@ -253,8 +256,9 @@ Commonly used variables:
 - `TICKET_SECRET` ticket QR signing secret
 - `USE_PONDER_DATA` API claim data source switch
 - `PONDER_SCHEMA` schema name for ponder tables (default `public`)
-- `PONDER_RPC_URL_11155111`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
+- `PONDER_RPC_URL_167012`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
 - `CONTRACT_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY` contract deployment
+- `PAYMENT_CURRENCY`, `PAYMENT_TOKEN_ADDRESS`, `PAYMENT_CHAIN` payment config (USDC on Kasplex testnet)
 
 See `.env.example` and the Quick Start section in this README for concrete setups.
 

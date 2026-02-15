@@ -23,7 +23,7 @@ export interface KasFyiAdapterConfig {
 }
 
 const DEFAULT_BASE_URL = 'https://api.kas.fyi'
-const DEFAULT_TESTNET_URL = 'https://api-tn10.kas.fyi'
+const DEFAULT_TESTNET_URL = 'https://api.kas.fyi'
 
 export class KasFyiAdapter implements KaspaAdapter {
   private readonly baseUrl: string
@@ -37,17 +37,27 @@ export class KasFyiAdapter implements KaspaAdapter {
     this.retryDelayMs = config.retryDelayMs ?? 1000
 
     // Determine base URL
+    const envBaseUrl = process.env['KASFYI_BASE_URL']
     if (config.baseUrl) {
       this.baseUrl = config.baseUrl
+    } else if (envBaseUrl) {
+      this.baseUrl = envBaseUrl
     } else if (config.network === 'testnet') {
       this.baseUrl = DEFAULT_TESTNET_URL
     } else {
-      this.baseUrl = process.env['KASFYI_BASE_URL'] || DEFAULT_BASE_URL
+      this.baseUrl = DEFAULT_BASE_URL
     }
   }
 
+  private normalizeEndpoint(endpoint: string): string {
+    const normalized = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+    // Kas.fyi latest API reference uses /v1 prefix.
+    if (normalized.startsWith('/v1/')) return normalized
+    return `/v1${normalized}`
+  }
+
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`
+    const url = `${this.baseUrl}${this.normalizeEndpoint(endpoint)}`
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options?.headers as Record<string, string>),

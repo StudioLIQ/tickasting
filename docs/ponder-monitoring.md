@@ -53,7 +53,7 @@ Ponder outputs structured logs. Key fields to filter:
 |-------|-------------|
 | `level` | `info`, `warn`, `error`, `fatal` |
 | `message` | Human-readable description |
-| `chain` | Chain name (e.g., `sepolia`) |
+| `chain` | Chain name (e.g., `kasplexTestnet`) |
 | `contract` | Contract name (e.g., `TickastingSale`) |
 | `event` | Event name (e.g., `TicketClaimed`) |
 | `blockNumber` | Block being processed |
@@ -114,7 +114,7 @@ curl -s https://<api-url>/health | jq -e '.ponder == "ok"' || echo "ALERT: Ponde
 1. Check `/status` for last indexed block number
 2. Check RPC provider status (Infura/Alchemy dashboard)
 3. Check Postgres connection and available connections
-4. If RPC rate limited: check `PONDER_RPC_URL_11155111` plan limits
+4. If RPC rate limited: check `PONDER_RPC_URL_167012` plan limits
 5. Restart Ponder — it resumes from checkpoint automatically
 
 ### 4.3 Handler Errors

@@ -262,6 +262,7 @@ Commonly used variables:
 - `TICKET_SECRET` ticket QR signing secret
 - `USE_PONDER_DATA` API claim data source switch
 - `PONDER_SCHEMA` schema name for ponder tables (default `public`)
+- `DATABASE_SCHEMA` Ponder database schema name (default `public`)
 - `PONDER_RPC_URL_167012`, `USDC_TRANSFER_START_BLOCK`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
 - `CONTRACT_RPC_URL`, `DEPLOYER_PRIVATE_KEY` contract deployment
 - `PAYMENT_CURRENCY`, `PAYMENT_TOKEN_ADDRESS`, `PAYMENT_CHAIN` payment config (USDC on Kasplex testnet)

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "pnpm run typecheck",
-    "dev": "ponder dev",
-    "start": "ponder start",
-    "serve": "ponder serve",
+    "dev": "sh -c 'ponder dev --schema \"${DATABASE_SCHEMA:-public}\"'",
+    "start": "sh -c 'ponder start --schema \"${DATABASE_SCHEMA:-public}\"'",
+    "serve": "sh -c 'ponder serve --schema \"${DATABASE_SCHEMA:-public}\"'",
     "codegen": "ponder codegen",
     "typecheck": "tsc --noEmit"
   },

@@ -191,6 +191,7 @@ pnpm env:sync:railway
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+- `DATABASE_SCHEMA=public`
 - `PONDER_RPC_URL_167012=https://rpc.kasplextest.xyz`
 - `PAYMENT_TOKEN_ADDRESS=0x593Cd4124ffE9D11B3114259fbC170a5759E0f54`
 - `USDC_TRANSFER_START_BLOCK=0` (또는 운영 시작 블록)

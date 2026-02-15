@@ -376,7 +376,7 @@ export async function scannerRoutes(fastify: FastifyInstance) {
     }
 
     const { ownerAddress, saleId, status, limit } = parseResult.data
-    const normalizedOwner = ownerAddress.toLowerCase()
+    const normalizedOwner = ownerAddress.trim().toLowerCase()
 
     if (USE_PONDER_DATA && (await ponderTablesExist())) {
       try {
@@ -686,12 +686,36 @@ function normalizeCodeForId(code: string): string {
 
 async function syncOwnerTicketsFromPonder(ownerAddress: string): Promise<void> {
   const rows = await prisma.$queryRawUnsafe<OnchainOwnedTicketRow[]>(
-    `SELECT
-       t.id AS token_id,
-       t.owner AS owner,
-       t.sale_id AS sale_id,
-       t.type_code AS type_code,
-       t.block_timestamp AS token_block_timestamp,
+    `WITH owner_tokens AS (
+       SELECT
+         t.id AS token_id,
+         t.owner AS owner,
+         t.sale_id AS sale_id,
+         t.type_code AS type_code,
+         t.block_timestamp AS token_block_timestamp
+       FROM "${PONDER_SCHEMA}"."token_ownership" t
+       WHERE lower(t.owner) = lower($1)
+       UNION ALL
+       SELECT
+         c.token_id AS token_id,
+         c.claimer AS owner,
+         c.sale_id AS sale_id,
+         c.type_code AS type_code,
+         c.block_timestamp AS token_block_timestamp
+       FROM "${PONDER_SCHEMA}"."claims_onchain" c
+       WHERE lower(c.claimer) = lower($1)
+         AND NOT EXISTS (
+           SELECT 1
+           FROM "${PONDER_SCHEMA}"."token_ownership" t2
+           WHERE t2.id = c.token_id
+         )
+     )
+     SELECT
+       ot.token_id AS token_id,
+       ot.owner AS owner,
+       ot.sale_id AS sale_id,
+       ot.type_code AS type_code,
+       ot.token_block_timestamp AS token_block_timestamp,
        c.block_timestamp AS claim_block_timestamp,
        c.kaspa_txid AS kaspa_txid,
        c.transaction_hash AS claim_tx_hash,
@@ -702,17 +726,16 @@ async function syncOwnerTicketsFromPonder(ownerAddress: string): Promise<void> {
        s.organizer AS sale_organizer,
        s.start_at AS sale_start_at,
        s.end_at AS sale_end_at
-     FROM "${PONDER_SCHEMA}"."token_ownership" t
+     FROM owner_tokens ot
      LEFT JOIN "${PONDER_SCHEMA}"."claims_onchain" c
-       ON c.sale_id = t.sale_id
-      AND c.token_id = t.id
+       ON c.sale_id = ot.sale_id
+      AND c.token_id = ot.token_id
      LEFT JOIN "${PONDER_SCHEMA}"."ticket_types_onchain" tt
-       ON tt.sale_id = t.sale_id
-      AND tt.type_code = t.type_code
+       ON tt.sale_id = ot.sale_id
+      AND tt.type_code = ot.type_code
      LEFT JOIN "${PONDER_SCHEMA}"."sales_onchain" s
-       ON s.id = t.sale_id
-     WHERE lower(t.owner) = lower($1)
-     ORDER BY t.block_timestamp DESC`,
+       ON s.id = ot.sale_id
+     ORDER BY ot.token_block_timestamp DESC`,
     ownerAddress
   )
 

@@ -88,6 +88,40 @@ async function insertPaymentTransferRow(
   )
 }
 
+async function insertPonderClaimRow(
+  client: PrismaClient,
+  data: {
+    id: string
+    saleId: string
+    typeCode: string
+    claimer: string
+    tokenId: string
+    kaspaTxid: string
+    finalRank: string
+    blockNumber: string
+    blockTimestamp: string
+    transactionHash: string
+  }
+) {
+  await client.$executeRawUnsafe(
+    `INSERT INTO "public"."claims_onchain"
+      (id, sale_id, type_code, claimer, token_id, kaspa_txid, final_rank, block_number, block_timestamp, transaction_hash)
+    VALUES
+      ($1, $2, $3, $4, $5::numeric, $6, $7::numeric, $8::numeric, $9::numeric, $10)
+    ON CONFLICT (id) DO NOTHING`,
+    data.id,
+    data.saleId,
+    data.typeCode,
+    data.claimer,
+    data.tokenId,
+    data.kaspaTxid,
+    data.finalRank,
+    data.blockNumber,
+    data.blockTimestamp,
+    data.transactionHash
+  )
+}
+
 describe('API E2E - buyer portal and metadata', () => {
   beforeAll(async () => {
     process.env['DATABASE_URL'] ??= DEFAULT_DATABASE_URL
@@ -389,5 +423,55 @@ describe('API E2E - buyer portal and metadata', () => {
     expect(metadataRes.body.properties.seat).toContain('Section A')
     expect(metadataRes.body.attributes.some((attr) => attr.trait_type === 'Performance')).toBe(true)
     expect(metadataRes.body.attributes.some((attr) => attr.trait_type === 'Seat')).toBe(true)
+  })
+
+  it('hydrates my tickets from claims_onchain when token_ownership row is missing', async () => {
+    if (!prisma) throw new Error('Prisma not initialized')
+
+    const ownerAddress = '0xd50f2d8cad5D0E784795A79a72B34bC479642E26'
+    const saleId = randomHex(32).toLowerCase()
+    const tokenId = '777001'
+    const typeCode = '0x5649500000000000000000000000000000000000000000000000000000000000' // "VIP"
+    const kaspaTxid = randomHex(32).toLowerCase()
+    const claimTxHash = randomHex(32).toLowerCase()
+    const nowSeconds = Math.floor(Date.now() / 1000).toString()
+
+    createdSaleIds.push(saleId)
+    createdEventIds.push(`onchain-event-${saleId}`)
+
+    await insertPonderClaimRow(prisma, {
+      id: `${saleId}-${kaspaTxid}`,
+      saleId,
+      typeCode,
+      claimer: ownerAddress.toLowerCase(),
+      tokenId,
+      kaspaTxid,
+      finalRank: '1',
+      blockNumber: '1',
+      blockTimestamp: nowSeconds,
+      transactionHash: claimTxHash,
+    })
+
+    const myTicketsRes = await requestJson<{
+      ownerAddress: string
+      total: number
+      tickets: Array<{
+        id: string
+        saleId: string
+        claimTxid: string | null
+        tokenId: string | null
+      }>
+    }>(`/v1/tickets?ownerAddress=${encodeURIComponent(ownerAddress)}`)
+
+    expect(myTicketsRes.status).toBe(200)
+    expect(myTicketsRes.body.total).toBeGreaterThanOrEqual(1)
+    expect(myTicketsRes.body.ownerAddress).toBe(ownerAddress.toLowerCase())
+
+    const expectedTicketId = `onchain-${saleId}-${tokenId}`
+    const syncedTicket = myTicketsRes.body.tickets.find((ticket) => ticket.id === expectedTicketId)
+    expect(syncedTicket).toBeDefined()
+    expect(syncedTicket?.saleId).toBe(saleId)
+    expect(syncedTicket?.claimTxid).toBe(claimTxHash)
+    expect(syncedTicket?.tokenId).toBe(tokenId)
   })
 })

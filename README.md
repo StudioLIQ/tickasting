@@ -1,262 +1,282 @@
 # Tickasting
 
-**Fair Ticketing Engine Powered by Kaspa**
+Fair ticketing engine powered by Kaspa acceptance ordering and deterministic ranking.
 
-> The server doesn't create the queue. The chain does. Verifiable by anyone.
+> The server does not decide queue order. The chain data does.
 
 ## Overview
 
-Tickasting is a zero-lag ticketing system built on Kaspa blockchain. Instead of a central server determining queue order, Tickasting uses on-chain acceptance data to create a **deterministic, verifiable ordering** that anyone can reproduce.
+Tickasting is a ticketing system designed to make queue ordering reproducible and auditable.
 
-### Key Features
+- Purchase attempts are validated from on-chain data.
+- Ranking is deterministic (`acceptingBlueScore` then `txid`).
+- Buyers can verify outcomes from published allocation data.
+- Optional claim/mint flow is indexed from EVM contract events.
 
-- **Deterministic Ordering**: Rankings based on `acceptingBlockHash.blueScore` + `txid` tiebreaker
-- **Provisional vs Final**: Two-stage UX showing real-time status and finality
-- **Anti-Bot PoW**: Client-side proof-of-work to increase cost for mass submissions
-- **Verifiable Results**: `allocation.json` snapshot for audit
+Important distinction:
 
-### Why Tickasting?
+- Not "fully on-chain contract-side ranking"
+- Yes "on-chain-data-driven ranking" from Kaspa acceptance metadata
 
-Traditional ticketing systems suffer from:
-- **Queue manipulation**: Servers can (intentionally or not) favor certain users
-- **Bot advantage**: Fast networks and automation beat regular users
-- **No verification**: Users have no way to verify their position was fair
+## Current Runtime Topology
 
-Tickasting solves this by:
-- Using blockchain acceptance order instead of server timestamps
-- Requiring proof-of-work to increase bot costs
-- Publishing all ordering rules and data for anyone to verify
+Tickasting currently runs with two index layers:
 
-## Quick Start
+- `apps/indexer`: Kaspa transaction detection/validation/ordering (required for purchase flow)
+- `apps/ponder`: EVM contract event indexing for claim data
 
-### Prerequisites
+Target architecture is migrating to Ponder-first for indexing responsibilities, but Kaspa scanning is still handled by `apps/indexer` today.
 
-- Node.js >= 20
-- pnpm >= 9
-- Docker & Docker Compose
-- KasWare wallet (for testing purchases)
+Details: `docs/architecture.md`, `docs/migration-ponder.md`
 
-### 1. Clone and Install
+## Monorepo Structure
 
-```bash
-git clone https://github.com/your-org/tickasting.git
-cd tickasting
-pnpm install
+```text
+apps/
+  web/       Next.js frontend
+  api/       Fastify API + WebSocket + domain logic
+  indexer/   Kaspa scanner/validator/orderer (active for core flow)
+  ponder/    EVM event indexer (claims/ownership)
+contracts/   TickastingSale Solidity contract (Sepolia)
+packages/
+  shared/    Shared libs (payload, PoW, merkle, kaspa adapter)
+infra/
+  docker-compose.yml   Local postgres/redis
 ```
 
-### 2. Start Infrastructure
+## Prerequisites
+
+- Node.js `>=20`
+- pnpm `>=9`
+- Docker + Docker Compose
+
+## Quick Start (Local Core)
+
+This path runs core flow locally: `web + api + indexer + postgres`.
+
+### 1) Install
+
+```bash
+pnpm install
+cp .env.example .env
+```
+
+### 2) Start local infra
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d
 ```
 
-### 3. Configure Environment
+### 3) Initialize DB
 
 ```bash
-cp .env.example .env
-# Edit .env with your settings (see Environment Variables below)
-```
-
-### 4. Initialize Database
-
-```bash
-cd apps/api
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
-cd ../..
 ```
 
-### 5. Run Development Servers
+### 4) Set core env values
+
+In `.env`:
+
+```dotenv
+DATABASE_URL=postgresql://tickasting:tickasting@localhost:5433/tickasting?schema=public
+API_HOST=0.0.0.0
+API_PORT=4001
+INDEXER_PORT=4002
+INDEXER_POLL_INTERVAL_MS=5000
+KASPA_NETWORK=testnet
+NEXT_PUBLIC_API_URL=http://localhost:4001
+NEXT_PUBLIC_WS_URL=ws://localhost:4001
+USE_PONDER_DATA=false
+```
+
+### 5) Run services
+
+Terminal 1:
 
 ```bash
-pnpm dev
+pnpm --filter @tickasting/shared dev
 ```
 
-This starts:
-- **Web**: http://localhost:3000
-- **API**: http://localhost:4001
-- **Ponder**: http://localhost:42069 (EVM indexer, if configured)
-- **Indexer** (legacy): http://localhost:4002 (Kaspa tx scanning)
+Terminal 2:
 
-### Health Checks
+```bash
+pnpm --filter @tickasting/api dev
+```
+
+Terminal 3:
+
+```bash
+pnpm --filter @tickasting/indexer dev
+```
+
+Terminal 4:
+
+```bash
+pnpm --filter @tickasting/web dev
+```
+
+### 6) Health checks
 
 ```bash
 curl http://localhost:4001/health
 curl http://localhost:4002/health
+curl http://localhost:4002/stats
 ```
+
+Web app: `http://localhost:3000`
+
+## Full Stack Dev (Including Ponder)
+
+If you also want EVM claim indexing locally:
+
+```dotenv
+PONDER_RPC_URL_11155111=https://sepolia.infura.io/v3/<key>
+TICKASTING_CONTRACT_ADDRESS=0x<deployed-address>
+TICKASTING_START_BLOCK=<deploy-block>
+USE_PONDER_DATA=true
+PONDER_SCHEMA=public
+```
+
+Then run:
+
+```bash
+pnpm --filter @tickasting/ponder dev
+```
+
+Ponder checks:
+
+```bash
+curl http://localhost:42069/health
+curl http://localhost:42069/ready
+curl http://localhost:42069/status
+```
+
+## Demo Flow
+
+### 1) Create event
+
+```bash
+curl -X POST http://localhost:4001/v1/events \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Demo Concert","venue":"Online"}'
+```
+
+### 2) Create sale
+
+```bash
+curl -X POST http://localhost:4001/v1/events/<eventId>/sales \
+  -H "Content-Type: application/json" \
+  -d '{
+    "network":"testnet",
+    "treasuryAddress":"kaspa:<YOUR_TESTNET_TREASURY_ADDRESS>",
+    "ticketPriceSompi":"100000000",
+    "supplyTotal":10,
+    "powDifficulty":8
+  }'
+```
+
+### 3) Publish sale
+
+```bash
+curl -X POST http://localhost:4001/v1/sales/<saleId>/publish
+```
+
+### 4) Check pages
+
+- `http://localhost:3000/sales/<saleId>`
+- `http://localhost:3000/sales/<saleId>/live`
+- `http://localhost:3000/sales/<saleId>/results`
+
+## API Surface (Core)
+
+### Events
+
+- `POST /v1/events`
+- `GET /v1/events`
+- `GET /v1/events/:eventId`
+
+### Sales
+
+- `POST /v1/events/:eventId/sales`
+- `GET /v1/sales`
+- `GET /v1/sales/:saleId`
+- `POST /v1/sales/:saleId/publish`
+- `POST /v1/sales/:saleId/finalize`
+- `GET /v1/sales/:saleId/stats`
+- `GET /v1/sales/:saleId/my-status?txid=...`
+- `GET /v1/sales/:saleId/allocation`
+- `POST /v1/sales/:saleId/commit`
+- `GET /v1/sales/:saleId/merkle-proof?txid=...`
+
+### Ticket Types
+
+- `GET /v1/sales/:saleId/ticket-types`
+- `POST /v1/sales/:saleId/ticket-types`
+- `PATCH /v1/sales/:saleId/ticket-types/:ticketTypeId`
+
+### Claims
+
+- `GET /v1/sales/:saleId/claims`
+- `POST /v1/sales/:saleId/claims/sync`
+- `GET /v1/sales/:saleId/claims/consistency`
+- `PATCH /v1/sales/:saleId/contract`
+
+### Scanner
+
+- `POST /v1/sales/:saleId/tickets/:txid/issue`
+- `POST /v1/scans/verify`
+- `POST /v1/scans/redeem`
+- `GET /v1/tickets/:ticketId`
+
+### Real-time
+
+- `WS /ws/sales/:saleId`
+
+### Health
+
+- `GET /health` (API)
+- `GET /health` and `GET /stats` (Indexer)
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://tickasting:tickasting@localhost:5433/tickasting` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `API_PORT` | API server port | `4001` |
-| `INDEXER_PORT` | Indexer service port | `4002` |
-| `INDEXER_POLL_INTERVAL_MS` | Transaction polling interval | `5000` |
-| `KASFYI_API_KEY` | Kas.fyi API key (optional for rate limits) | - |
-| `KASPA_NETWORK` | Network (`mainnet` or `testnet`) | `testnet` |
-| `NEXT_PUBLIC_API_URL` | API URL for frontend | `http://localhost:4001` |
-| `NEXT_PUBLIC_WS_URL` | WebSocket URL for frontend | `ws://localhost:4001` |
+Commonly used variables:
 
-## Demo Walkthrough
+- `DATABASE_URL` Postgres DSN
+- `API_HOST`, `API_PORT` API listen config
+- `INDEXER_PORT`, `INDEXER_POLL_INTERVAL_MS` indexer config
+- `KASPA_NETWORK` (`testnet` or `mainnet`)
+- `KASFYI_API_KEY`, `KASFYI_BASE_URL` Kaspa adapter config
+- `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` web runtime targets
+- `WS_BROADCAST_INTERVAL_MS` API websocket broadcast interval
+- `TICKET_SECRET` ticket QR signing secret
+- `USE_PONDER_DATA` API claim data source switch
+- `PONDER_SCHEMA` schema name for ponder tables (default `public`)
+- `PONDER_RPC_URL_11155111`, `TICKASTING_CONTRACT_ADDRESS`, `TICKASTING_START_BLOCK` ponder config
+- `CONTRACT_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY` contract deployment
 
-### Step 1: Create an Event and Sale
+See `.env.example` and `LOCAL.md` for concrete setups.
 
-```bash
-# Create event
-curl -X POST http://localhost:4001/v1/events \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Demo Concert", "venue": "Virtual Arena"}'
+## Deployment
 
-# Create sale (use the eventId from response)
-curl -X POST http://localhost:4001/v1/events/{eventId}/sales \
-  -H "Content-Type: application/json" \
-  -d '{
-    "treasuryAddress": "kaspa:your-testnet-address",
-    "ticketPriceSompi": "100000000",
-    "supplyTotal": 10,
-    "powDifficulty": 8
-  }'
+Production setup guidance is in:
 
-# Publish sale (use saleId from response)
-curl -X POST http://localhost:4001/v1/sales/{saleId}/publish
-```
+- `DEPLOY.md`
 
-### Step 2: Purchase Flow
+Local development and demo runbook:
 
-1. Open http://localhost:3000/sales/{saleId}
-2. Connect your KasWare wallet
-3. Click "Purchase" - browser computes PoW
-4. Approve transaction in wallet
-5. Watch your status update in real-time
-
-### Step 3: View Results
-
-1. Open http://localhost:3000/sales/{saleId}/results
-2. Search by transaction ID
-3. Download `allocation.json` for verification
-
-## Verification Guide
-
-### Verify Ordering Rules
-
-All rankings follow this deterministic order:
-1. **Primary**: `acceptingBlueScore` ascending
-2. **Tiebreaker**: `txid` lexicographic ascending
-
-To verify independently:
-1. Get all purchase transactions from the treasury address
-2. Filter by valid payload (magic: `TKS1`, correct saleId)
-3. Get acceptance data for each transaction
-4. Sort by blueScore, then txid
-5. Compare with `allocation.json` winners list
-
-### Verify PoW
-
-Each payload contains a PoW nonce. Verify with:
-```
-message = "TickastingPoW|v1|{saleId}|{buyerAddrHash}|{nonce}"
-hash = SHA256(message)
-leadingZeroBits(hash) >= difficulty
-```
-
-## Project Structure
-
-```
-tickasting/
-├── apps/
-│   ├── web/           # Next.js frontend (Vercel)
-│   │   └── app/
-│   │       └── sales/[saleId]/
-│   │           ├── page.tsx         # Purchase page
-│   │           ├── live/page.tsx    # Live dashboard
-│   │           └── results/page.tsx
-│   ├── api/           # Fastify API server (Railway)
-│   │   └── src/
-│   │       └── routes/
-│   ├── ponder/        # Ponder indexer (Railway, target)
-│   └── indexer/       # Legacy indexer (deprecated)
-├── contracts/         # Solidity ERC-721 (Sepolia)
-├── packages/
-│   └── shared/        # Shared utilities
-│       └── src/
-│           ├── payload.ts    # Encode/decode
-│           ├── pow.ts        # PoW solve/verify
-│           ├── merkle.ts     # Merkle tree
-│           └── kaspa/        # Adapter interface
-├── infra/
-│   └── docker-compose.yml
-├── docs/
-│   ├── architecture.md   # Architecture decision record
-│   ├── contract-spec.md  # Contract specification
-│   └── audit.md          # Verification guide
-├── PROJECT.md         # Full specification
-└── TICKET.md          # Implementation tickets
-```
-
-## Architecture
-
-> Indexing is transitioning from `apps/indexer` to Ponder (`apps/ponder`).
-> See [docs/architecture.md](docs/architecture.md) for the full decision record.
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│   Web App   │────▶│  API Server │────▶│    Database     │
-│  (Vercel)   │     │  (Railway)  │     │  (Railway PG)   │
-└─────────────┘     └─────────────┘     └─────────────────┘
-       │                   ▲                     ▲
-       │                   │                     │
-       ▼                   │               ┌─────┘
-┌─────────────┐     ┌─────────────┐     ┌──────────────────┐
-│   Wallet    │     │   Ponder    │────▶│  Kaspa Network   │
-│  (KasWare)  │────▶│  (Railway)  │────▶│  EVM (Sepolia)   │
-└─────────────┘     └─────────────┘     └──────────────────┘
-```
-
-## API Endpoints
-
-### Events & Sales
-- `POST /v1/events` - Create event
-- `POST /v1/events/:eventId/sales` - Create sale
-- `POST /v1/sales/:saleId/publish` - Publish sale (scheduled → live)
-- `POST /v1/sales/:saleId/finalize` - Start finalization
-- `GET /v1/sales/:saleId` - Get sale details
-
-### Buyer
-- `GET /v1/sales/:saleId/my-status?txid=` - Get purchase status
-- `GET /v1/sales/:saleId/stats` - Get sale statistics
-- `GET /v1/sales/:saleId/allocation` - Get winners list
-
-### Real-time
-- `WS /ws/sales/:saleId` - Live updates stream
+- `LOCAL.md`
 
 ## Testing
 
 ```bash
-# Run all tests
 pnpm test
-
-# Run specific package tests
 pnpm --filter @tickasting/shared test
 pnpm --filter @tickasting/indexer test
+pnpm --filter @tickasting/api test
 ```
-
-## Tech Stack
-
-- **Monorepo**: pnpm + Turborepo
-- **Web**: Next.js 15, React 19, Tailwind CSS
-- **API**: Fastify 5, Zod, @fastify/websocket
-- **Indexing**: Ponder 0.16 (EVM contract events)
-- **Contracts**: Solidity, Hardhat, OpenZeppelin (Sepolia ERC-721)
-- **Database**: PostgreSQL + Prisma
-- **Shared**: TypeScript, Vitest
 
 ## License
 
-MIT License - see [LICENSE](LICENSE)
-
----
-
-Built for the Kaspa Hackathon 2026
+MIT (`LICENSE`)

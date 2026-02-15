@@ -1,239 +1,339 @@
-# DEPLOY.md - Vercel + Railway + Testnet 배포 가이드
+# DEPLOY.md
 
-이 문서는 Tickasting를 아래 구조로 배포하는 기준 문서입니다.
+인턴 온보딩 기준으로 작성한 Tickasting 배포 가이드입니다.  
+이 문서 순서대로 진행하면 `Vercel + Railway` 배포를 재현할 수 있습니다.
 
-- FE: Vercel (`apps/web`)
-- BE API: Railway (`apps/api`)
-- Indexing: Railway (`apps/ponder` — target; `apps/indexer` is deprecated)
-- DB: Railway PostgreSQL (single source of truth)
-- Contract: Sepolia EVM testnet (`contracts/`)
-- Chain: Kaspa testnet (데모/검증 기준)
+## 0) 현재 배포 구조 (중요)
 
----
+현재 코드 기준 운영 구조:
 
-## 0) 배포 아키텍처
+- `apps/web` -> Vercel (Public)
+- `apps/api` -> Railway (Public)
+- `apps/indexer` -> Railway (Private, Kaspa 스캔 필수)
+- `apps/ponder` -> Railway (Private, EVM claim 인덱싱)
+- PostgreSQL -> Railway (Internal)
 
-> **아키텍처 결정 (GP-027):** 인덱싱은 Ponder(`apps/ponder`)로 전환한다.
-> `apps/indexer`는 deprecated이며 전환 완료(GP-035) 후 제거한다.
-> 상세: `docs/architecture.md`
+주의:
 
-### 0.1 서비스 구성 (목표)
+- `apps/indexer`는 "EVM 인덱싱 기준"으로 deprecated지만, **Kaspa 구매 감지/검증/순위 계산은 아직 indexer가 담당**합니다.
+- 즉, 현재 운영에서는 `api + indexer + postgres`가 core 필수이고, `ponder`는 claim/NFT 이벤트 가시화를 위해 추가됩니다.
 
-| # | Service | Platform | Visibility |
-|---|---------|----------|------------|
-| 1 | `tickasting-web` | Vercel | Public |
-| 2 | `tickasting-api` | Railway | Public |
-| 3 | `tickasting-ponder` | Railway | Private (target indexer) |
-| 4 | `tickasting-postgres` | Railway | Internal |
-| 5 | ~~`tickasting-indexer`~~ | ~~Railway~~ | ~~Private (deprecated)~~ |
+## 0.1) 핵심 원칙: "온체인 기반 선착순"
 
-### 0.2 데이터 흐름
+Tickasting의 핵심은 아래입니다.
 
-1. 브라우저 → Vercel Web App 접속
-2. Web → Railway API(`https://...up.railway.app`) 호출
-3. Ponder Worker → Kaspa testnet / EVM Sepolia에서 tx/이벤트 인덱싱
-4. Ponder → Railway Postgres에 인덱싱 결과 적재
-5. API → Postgres에서 도메인 로직/집계 수행
+1. 선착순 결정의 **근거 데이터는 온체인(Kaspa acceptance)** 이다.
+2. 정렬 규칙은 고정이다: `acceptingBlueScore ASC`, 동점이면 `txid ASC`.
+3. 서버는 이 규칙으로 계산할 뿐, 임의 순번을 만들지 않는다.
 
----
+정확한 표현:
 
-## 1) 사전 체크리스트
+- `완전 온체인 컨트랙트 내 계산`은 아님
+- `온체인 데이터 기반 결정(검증 가능)`은 맞음
 
-- Node.js 20+
-- pnpm 9+
-- Railway 프로젝트 생성 완료
-- Vercel 프로젝트 생성 완료
-- Kaspa testnet 지갑/treasury 주소 준비
+왜 이렇게 하는가:
 
-컨트랙트:
-- 클레임 컨트랙트는 EVM Testnet (Sepolia)에 배포합니다.
-- 상세 스펙: `docs/contract-spec.md`
-- 컨트랙트 없이도 Kaspa 결제/순번/결과 플로우는 동작합니다 (claim만 비활성).
+- 구매 트랜잭션은 Kaspa 체인에 있고,
+- claim/NFT는 EVM(Sepolia) 컨트랙트에서 처리되기 때문에
+- 현재 구조는 "Kaspa 온체인 데이터 -> 서버 결정/검증 -> (선택) EVM claim 검증" 흐름이 현실적입니다.
 
----
+## 1) 완료 기준 (먼저 읽기)
 
-## 2) Railway 설정
+아래 8개가 모두 만족되면 배포 완료입니다.
 
-## 2.1 프로젝트/서비스 생성
+1. Railway에 `api/indexer/ponder/postgres` 4개 서비스가 모두 running
+2. API `/health` 응답의 `status=ok`, `db=ok`
+3. Indexer `/health` 응답의 `status=ok`
+4. Ponder `/ready`가 200
+5. Vercel 최신 배포가 Ready
+6. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`가 API 도메인을 가리킴
+7. 이벤트 생성 -> 세일 생성 -> publish -> `/live` 페이지 반영 확인
+8. `/allocation`에서 winner 목록이 `acceptingBlueScore/txid` 정렬 규칙과 일치
 
-Railway 한 프로젝트에 아래를 만듭니다.
+## 2) 사전 준비
 
-1. `tickasting-api` 서비스 (Public Domain)
-2. `tickasting-ponder` 서비스 (Private, 내부 헬스체크만)
-3. PostgreSQL 서비스
-4. (전환 완료 전) `tickasting-indexer` 서비스 (deprecated, Private)
+### 2.1 계정/권한
 
-권장:
-- `tickasting-ponder`는 Public Domain을 열지 않고 내부 헬스체크만 사용
+- Railway 프로젝트 생성 권한
+- Vercel 프로젝트 생성 권한
+- GitHub 레포 접근 권한
 
-## 2.2 Monorepo 배포 원칙
+### 2.2 로컬 도구
 
-이 레포는 workspace(`packages/shared`) 의존이 있으므로, 서비스별로 디렉토리를 잘라 배포하지 말고 **레포 루트 기준**으로 배포하세요.
+- Node.js `>=20`
+- pnpm `>=9`
 
-## 2.3 API 서비스 명령어
-
-- Build Command:
+확인:
 
 ```bash
-pnpm --filter @tickasting/api db:generate && pnpm --filter @tickasting/shared build && pnpm --filter @tickasting/api build
+node -v
+pnpm -v
 ```
 
-- Start Command:
+### 2.3 사전 확보 값
+
+- Sepolia RPC URL (`PONDER_RPC_URL_11155111`에 사용)
+- (선택) 컨트랙트 배포용 private key + 테스트 ETH
+- (운영) 충분히 긴 랜덤 문자열 (`TICKET_SECRET`)
+
+## 3) Railway 프로젝트 생성
+
+### Step 3-1. 새 Railway Project 생성
+
+1. Railway 대시보드에서 `New Project`
+2. `Deploy from GitHub Repo` 선택
+3. 현재 레포 연결
+
+### Step 3-2. PostgreSQL 서비스 추가
+
+1. 프로젝트 내 `New` -> `Database` -> `Add PostgreSQL`
+2. 서비스 이름을 `tickasting-postgres`로 변경 (권장)
+3. 생성 후 `Variables`에서 `DATABASE_URL`이 있는지 확인
+
+## 4) Railway 서비스 3개 추가
+
+아래 3개를 같은 레포에서 각각 생성합니다.
+
+- `tickasting-api`
+- `tickasting-indexer`
+- `tickasting-ponder`
+
+중요:
+
+- 이 레포는 workspace 모노레포입니다.
+- 서비스별로 `apps/...`만 잘라 배포하지 말고, **레포 루트 기준 배포**로 설정합니다.
+
+## 5) tickasting-api 설정 (Public)
+
+### Step 5-1. 서비스 생성
+
+1. `New` -> `GitHub Repo` -> 같은 레포 선택
+2. 서비스 이름: `tickasting-api`
+
+### Step 5-2. Deploy 설정
+
+`Settings` -> `Deploy`에서 설정:
+
+- Build Command
+
+```bash
+pnpm --filter @tickasting/api db:generate \
+  && pnpm --filter @tickasting/shared build \
+  && pnpm --filter @tickasting/api build
+```
+
+- Start Command
 
 ```bash
 API_HOST=0.0.0.0 API_PORT=${PORT:-4001} pnpm --filter @tickasting/api start
 ```
 
-## 2.4 Ponder 서비스 명령어 (target)
-
-- Build Command: 별도 빌드 불필요 (Ponder가 내부적으로 esbuild 사용)
-
-- Start Command:
-
-```bash
-pnpm --filter @tickasting/ponder start
-```
-
-- Dev Command (로컬):
-
-```bash
-pnpm --filter @tickasting/ponder dev
-```
-
-## 2.4.1 Ponder 환경변수
-
-필수:
-
-- `DATABASE_URL=${{Postgres.DATABASE_URL}}`
-- `PONDER_RPC_URL_11155111=https://sepolia.infura.io/v3/<key>`
-- `TICKASTING_CONTRACT_ADDRESS=0x<deployed-address>`
-
-권장:
-
-- `TICKASTING_START_BLOCK=<deploy-block-number>` (초기 sync 속도 향상)
-
-## 2.4.1 Indexer 서비스 명령어 (deprecated)
-
-> `apps/indexer`는 deprecated다. Ponder 전환 완료(GP-035) 후 제거 예정.
-
-- Build Command:
-
-```bash
-pnpm --filter @tickasting/indexer db:generate && pnpm --filter @tickasting/shared build && pnpm --filter @tickasting/indexer build
-```
-
-- Start Command:
-
-```bash
-INDEXER_PORT=${PORT:-4002} pnpm --filter @tickasting/indexer start
-```
-
-## 2.5 API 환경변수 (`tickasting-api`)
+### Step 5-3. Variables 설정
 
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
 - `API_HOST=0.0.0.0`
-- `KASPA_NETWORK=testnet`
+- `TICKET_SECRET=<긴 랜덤 문자열>`
 
 권장:
 
 - `WS_BROADCAST_INTERVAL_MS=2000`
-- `KASFYI_API_KEY=<optional>`
-- `TICKET_SECRET=<랜덤 긴 문자열>`
+- `USE_PONDER_DATA=true`
+- `PONDER_SCHEMA=public`
 
-## 2.6 Indexer 환경변수 (`tickasting-indexer`)
+### Step 5-4. Networking
+
+1. `Networking`에서 Public Domain 생성
+2. 생성된 주소를 기록: `https://<api-domain>`
+
+### Step 5-5. Healthcheck
+
+- Path: `/health`
+- Port: 서비스 기본 포트(`PORT`)
+
+## 6) tickasting-indexer 설정 (Private)
+
+### Step 6-1. 서비스 생성
+
+1. `New` -> `GitHub Repo` -> 같은 레포 선택
+2. 서비스 이름: `tickasting-indexer`
+
+### Step 6-2. Deploy 설정
+
+- Build Command
+
+```bash
+pnpm --filter @tickasting/indexer db:generate \
+  && pnpm --filter @tickasting/shared build \
+  && pnpm --filter @tickasting/indexer build
+```
+
+- Start Command
+
+```bash
+INDEXER_PORT=${PORT:-4002} pnpm --filter @tickasting/indexer start
+```
+
+### Step 6-3. Variables 설정
 
 필수:
 
 - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
-- `KASPA_NETWORK=testnet`
+- `KASPA_NETWORK=testnet` (운영이 mainnet이면 mainnet)
 
 권장:
 
 - `INDEXER_POLL_INTERVAL_MS=5000`
 - `KASFYI_API_KEY=<optional>`
+- `KASFYI_BASE_URL=https://api.kas.fyi`
 
-## 2.7 DB 스키마 반영 (초기 1회)
+### Step 6-4. Healthcheck
 
-이 레포에는 `prisma/migrations` 디렉토리가 없으므로, 초기 배포 시 `db push`로 스키마를 맞춥니다.
+- Path: `/health`
+- Port: 서비스 기본 포트(`PORT`)
 
-Railway 서비스 셸(또는 Job)에서 1회 실행:
+## 7) tickasting-ponder 설정 (Private)
+
+### Step 7-1. 서비스 생성
+
+1. `New` -> `GitHub Repo` -> 같은 레포 선택
+2. 서비스 이름: `tickasting-ponder`
+
+### Step 7-2. Deploy 설정
+
+- Build Command (선택)
+
+```bash
+pnpm --filter @tickasting/ponder typecheck
+```
+
+- Start Command
+
+```bash
+pnpm --filter @tickasting/ponder start
+```
+
+### Step 7-3. Variables 설정
+
+필수:
+
+- `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+- `PONDER_RPC_URL_11155111=https://sepolia.infura.io/v3/<key>`
+- `TICKASTING_CONTRACT_ADDRESS=0x<deployed-contract-address>`
+
+권장:
+
+- `TICKASTING_START_BLOCK=<deploy-block-number>`
+
+### Step 7-4. Healthcheck
+
+- Path: `/health`
+- Port: `42069` (Ponder 기본)
+
+참고:
+
+- Ponder readiness는 `/ready`로 확인합니다.
+
+## 8) DB 초기화 (초기 1회)
+
+API 서비스 Shell(또는 Railway Job)에서 실행:
 
 ```bash
 pnpm --filter @tickasting/api db:generate
-pnpm --filter @tickasting/api db:push
+pnpm --filter @tickasting/api exec prisma migrate deploy
 ```
 
-필요 시 시드:
+샘플 데이터 필요 시:
 
 ```bash
 pnpm --filter @tickasting/api db:seed
 ```
 
----
+## 9) Vercel 설정 (`apps/web`)
 
-## 3) Vercel 설정 (`apps/web`)
+### Step 9-1. 프로젝트 생성
 
-## 3.1 프로젝트 연결
+1. Vercel -> `Add New...` -> `Project`
+2. 같은 GitHub 레포 선택
+3. Framework: Next.js 자동 인식 확인
+4. Root Directory를 `apps/web`로 지정
 
-- Framework: Next.js
-- Root Directory: `apps/web`
-
-## 3.2 Vercel 환경변수
+### Step 9-2. Environment Variables
 
 필수:
 
-- `NEXT_PUBLIC_API_URL=https://<tickasting-api-public-domain>`
-- `NEXT_PUBLIC_WS_URL=wss://<tickasting-api-public-domain>`
-
-예시:
-
-- `NEXT_PUBLIC_API_URL=https://tickasting-api-production.up.railway.app`
-- `NEXT_PUBLIC_WS_URL=wss://tickasting-api-production.up.railway.app`
+- `NEXT_PUBLIC_API_URL=https://<api-domain>`
+- `NEXT_PUBLIC_WS_URL=wss://<api-domain>`
 
 주의:
-- `NEXT_PUBLIC_*` 값은 빌드 시점에 주입됩니다.
-- 값 변경 후에는 Vercel에서 반드시 재배포가 필요합니다.
 
----
+- `NEXT_PUBLIC_*`는 빌드 타임 주입입니다.
+- 값 변경 후에는 반드시 재배포가 필요합니다.
 
-## 4) Testnet(온체인) 준비
+## 10) (선택) 컨트랙트 배포/연결
 
-데모에서 반드시 맞춰야 하는 값:
+claim/NFT 발행 흐름을 쓰려면 Sepolia 컨트랙트가 필요합니다.
 
-1. 세일 생성 시 `network: "testnet"`
-2. `treasuryAddress`는 testnet 주소
-3. 지갑(KasWare)도 testnet 네트워크
-4. Indexer 환경변수 `KASPA_NETWORK=testnet`
+`contracts/.env` 예시:
 
----
-
-## 5) 배포 후 스모크 테스트
-
-## 5.1 API/Indexer 헬스체크
-
-```bash
-curl https://<tickasting-api-public-domain>/health
-curl https://<tickasting-indexer-private-or-public-domain>/health
+```dotenv
+CONTRACT_RPC_URL=https://sepolia.infura.io/v3/<your-key>
+DEPLOYER_PRIVATE_KEY=<private-key>
+ETHERSCAN_API_KEY=<optional>
 ```
 
-Indexer를 private로 두면 Railway 내부 헬스체크나 로그로 확인하세요.
-
-## 5.2 E2E 테스트 (데모 전 필수)
-
-1) 이벤트 생성
+배포:
 
 ```bash
-curl -X POST https://<tickasting-api-public-domain>/v1/events \
+pnpm --filter @tickasting/contracts compile
+pnpm --filter @tickasting/contracts test
+pnpm --filter @tickasting/contracts deploy:sepolia
+pnpm --filter @tickasting/contracts export-abi
+```
+
+배포된 주소를 `tickasting-ponder`의 `TICKASTING_CONTRACT_ADDRESS`에 반영하고 재배포합니다.
+
+필요 시 sale에 컨트랙트 주소 등록:
+
+```bash
+curl -X PATCH https://<api-domain>/v1/sales/<saleId>/contract \
   -H "Content-Type: application/json" \
-  -d '{"title":"Railway+Vercel Demo","venue":"Online"}'
+  -d '{"claimContractAddress":"0x<deployed-address>"}'
 ```
 
-2) 세일 생성 (`eventId` 교체)
+## 11) 스모크 테스트 (반드시 실행)
+
+### Step 11-1. 헬스체크
 
 ```bash
-curl -X POST https://<tickasting-api-public-domain>/v1/events/<eventId>/sales \
+curl https://<api-domain>/health
+curl https://<indexer-domain>/health
+curl https://<ponder-domain>/health
+curl https://<ponder-domain>/ready
+```
+
+API `/health`에서 확인할 값:
+
+- `status: "ok"`
+- `db: "ok"`
+- `usePonderData: true` (설정한 경우)
+- `ponder: "ok"` (Ponder 테이블 준비된 경우)
+
+### Step 11-2. E2E 최소 흐름
+
+이벤트 생성:
+
+```bash
+curl -X POST https://<api-domain>/v1/events \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Railway Demo","venue":"Online"}'
+```
+
+세일 생성:
+
+```bash
+curl -X POST https://<api-domain>/v1/events/<eventId>/sales \
   -H "Content-Type: application/json" \
   -d '{
     "network":"testnet",
@@ -244,167 +344,93 @@ curl -X POST https://<tickasting-api-public-domain>/v1/events/<eventId>/sales \
   }'
 ```
 
-3) 세일 publish
+세일 publish:
 
 ```bash
-curl -X POST https://<tickasting-api-public-domain>/v1/sales/<saleId>/publish
+curl -X POST https://<api-domain>/v1/sales/<saleId>/publish
 ```
 
-4) 브라우저 확인
+웹 확인:
 
-- `https://<your-vercel-domain>/sales/<saleId>`
-- `https://<your-vercel-domain>/sales/<saleId>/live`
-- `https://<your-vercel-domain>/sales/<saleId>/results`
+- `https://<vercel-domain>/sales/<saleId>`
+- `https://<vercel-domain>/sales/<saleId>/live`
+- `https://<vercel-domain>/sales/<saleId>/results`
 
----
+### Step 11-3. "온체인 기반 선착순" 검증
 
-## 6) 데모 당일 체크리스트
-
-1. Railway API 상태 Green (`curl /health` → `"ponder": "ok"`)
-2. Railway Ponder 기동 중 (로그에서 indexed block 확인)
-3. Railway Postgres 연결 정상
-4. Vercel 최신 배포가 `Ready`
-5. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`가 Railway API 도메인으로 설정됨
-6. sale의 `network=testnet`
-7. 지갑 네트워크 testnet
-8. Ponder가 컨트랙트 이벤트를 인덱싱 중인지 확인
-
----
-
-## 7) 장애 대응 빠른 가이드
-
-## 7.1 Web에서 API 호출 실패
-
-- Vercel env의 `NEXT_PUBLIC_API_URL` 확인
-- API Public Domain이 살아있는지 `curl /health` 확인
-
-## 7.2 live 페이지 WebSocket 미수신
-
-- `NEXT_PUBLIC_WS_URL`가 `wss://...railway.app`인지 확인
-- API 로그에서 `/ws/sales/:saleId` 연결 로그 확인
-
-## 7.3 Indexer가 구매 감지 못함 (Legacy)
-
-- Indexer env `KASPA_NETWORK=testnet` 확인
-- sale이 `live` 상태인지 확인
-- `treasuryAddress`가 testnet 주소인지 확인
-- `KASFYI_API_KEY` 추가 후 재시도
-
-## 7.4 Ponder 인덱싱 중단/지연
-
-- Railway Ponder 서비스 로그 확인 (error/warning)
-- `PONDER_RPC_URL_11155111` RPC URL 정상 여부 확인
-- `TICKASTING_CONTRACT_ADDRESS` 값이 올바른지 확인
-- Ponder 재시작 시 체크포인트부터 자동 재개됨
-- 완전 재인덱싱이 필요한 경우: Postgres에서 Ponder 스키마의 테이블 DROP 후 재시작
-
-## 7.5 Ponder 헬스체크
-
-Ponder 내장 엔드포인트:
-- `GET /health` — 기동 상태
-- `GET /ready` — 인덱싱 준비 완료 여부
-- `GET /status` — 인덱싱 진행 상태
-
-Railway 헬스체크 설정:
-- Path: `/health`
-- Port: `42069` (Ponder 기본 포트)
-- Interval: 30s
-- Timeout: 10s
-
-## 7.6 Ponder 초기 sync / 재동기화
-
-Ponder는 `startBlock`부터 현재 블록까지 이벤트를 인덱싱합니다.
-
-초기 sync 속도 향상:
-- `TICKASTING_START_BLOCK`을 컨트랙트 배포 블록으로 설정
-- Alchemy/Infura의 archive 노드 RPC 사용 권장
-
-재동기화(전체):
-1. Ponder 서비스 중지
-2. Postgres에서 Ponder 관련 테이블 DROP
-3. Ponder 재시작 → 처음부터 재인덱싱
-
----
-
-## 8) Contract 배포 (Sepolia)
-
-### 8.1 사전 준비
-
-- Sepolia ETH (faucet: https://sepoliafaucet.com)
-- Infura/Alchemy Sepolia RPC URL
-- 배포자 private key
-
-### 8.2 환경변수
-
-`contracts/.env` (커밋 금지):
-
-```dotenv
-CONTRACT_RPC_URL=https://sepolia.infura.io/v3/<your-key>
-DEPLOYER_PRIVATE_KEY=<deployer-private-key>
-ETHERSCAN_API_KEY=<optional-for-verify>
-```
-
-### 8.3 배포 절차
+아래 API로 최종 스냅샷을 확인합니다.
 
 ```bash
-# 1. 컴파일
-pnpm --filter @tickasting/contracts compile
-
-# 2. 테스트
-pnpm --filter @tickasting/contracts test
-
-# 3. Sepolia 배포
-pnpm --filter @tickasting/contracts deploy:sepolia
-
-# 4. 출력된 컨트랙트 주소를 기록
-# TICKASTING_CONTRACT_ADDRESS=0x...
-
-# 5. (선택) Etherscan 검증
-pnpm --filter @tickasting/contracts verify -- <contract-address>
-
-# 6. ABI export
-pnpm --filter @tickasting/contracts export-abi
+curl https://<api-domain>/v1/sales/<saleId>/allocation
 ```
 
-### 8.4 컨트랙트 초기화
+확인 포인트:
 
-배포 후 컨트랙트에 sale/ticketType을 등록합니다:
+1. `orderingRule.primary`가 `acceptingBlockHash.blueScore asc`
+2. `orderingRule.tiebreaker`가 `txid lexicographic asc`
+3. `winners`가 위 규칙대로 정렬되어 있는지 샘플 몇 건 수동 확인
 
-1. `createSale(saleId, organizerAddress, startAt, endAt)`
-2. `defineTicketType(typeCode, name, priceSompi, supply, metadataUri)` — 타입별 반복
-3. 판매 종료 + 결과 확정 후: `openClaim(merkleRoot)`
-4. 모든 claim 완료 후: `finalizeSale()`
+이 검증이 통과하면 "서버 시각"이 아니라 "체인 acceptance 기준"으로 선착순이 산정됨을 확인할 수 있습니다.
 
-### 8.5 API에 컨트랙트 주소 등록
+## 12) 자주 나는 문제와 해결
 
-```bash
-curl -X PATCH https://<api-domain>/v1/sales/<saleId>/contract \
-  -H "Content-Type: application/json" \
-  -d '{"claimContractAddress":"0x<deployed-address>"}'
-```
+### 문제 1. API는 살아있는데 live 통계가 안 움직임
 
----
+원인 후보:
 
-## 9) 데모 체크리스트 (컨트랙트 + Ponder 포함)
+- indexer down
+- sale `network`와 indexer `KASPA_NETWORK` 불일치
+- treasury 주소 네트워크 불일치
 
-1. Railway API 상태 Green (`/health` → `"ponder": "ok"`)
-2. Railway Ponder 기동 + 인덱싱 진행 중 (`/ready` → 200)
-3. Railway Postgres 연결 정상
-4. Vercel 최신 배포 Ready
-5. Sepolia 컨트랙트 배포 완료 + 주소 등록
-6. Ponder env에 `TICKASTING_CONTRACT_ADDRESS` 설정
-7. sale에 ticket types 등록 (VIP/R/GEN)
-8. `network=testnet`, 지갑 testnet
-9. claim 스모크 테스트: 1건 claim → Ponder에서 claim 인덱싱 확인
-10. API `/v1/sales/<saleId>/claims?source=ponder` 응답 확인
+조치:
 
----
+1. indexer `/health`, `/stats` 확인
+2. indexer env 재검증
+3. 문제 있으면 indexer 재배포
 
-## 10) 업데이트 배포 루틴
+### 문제 2. API `/health`에서 `ponder=tables_missing`
 
-1. 코드 머지
-2. Railway API/Ponder 자동 재배포 확인
-3. 필요 시 API 서비스에서 `pnpm --filter @tickasting/api db:push`
-4. 컨트랙트 변경 시: 재배포 + ABI export + 주소 갱신 + Ponder 재인덱싱
-5. Vercel 재배포
-6. Ponder `/ready` 확인 후 스모크 테스트 1회 재실행
+원인:
+
+- `USE_PONDER_DATA=true`인데 Ponder 테이블 미생성
+
+조치:
+
+1. Ponder 서비스가 동일 `DATABASE_URL` 쓰는지 확인
+2. Ponder 서비스 재시작
+3. `/ready`가 200 될 때까지 대기
+
+### 문제 3. 프론트가 옛 API 주소를 계속 호출
+
+원인:
+
+- Vercel env 수정 후 재배포 누락
+
+조치:
+
+1. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` 확인
+2. Vercel 재배포
+
+## 13) 롤백 절차 (긴급)
+
+### 13.1 API에서 Ponder 읽기 중단
+
+1. API env에서 `USE_PONDER_DATA=false`
+2. API 재배포
+
+### 13.2 특정 서비스만 즉시 복구
+
+1. Railway에서 해당 서비스 이전 성공 배포로 롤백
+2. `/health` 정상 확인
+3. E2E 최소 흐름 다시 확인
+
+## 14) 인턴용 최종 체크리스트
+
+배포 완료 보고 전에 아래를 체크해서 공유합니다.
+
+1. 서비스 URL 3개 (API / Indexer / Ponder)
+2. API `/health` JSON 캡처
+3. Ponder `/ready` 200 캡처
+4. Vercel 배포 URL
+5. 이벤트/세일 생성 및 publish 성공 로그
+6. `/live` 페이지 반영 캡처
